@@ -20,6 +20,7 @@ import (
 	"github.com/brunoga/robomaster/module/camera"
 	"github.com/brunoga/robomaster/module/chassis"
 	"github.com/brunoga/robomaster/module/gun"
+	"github.com/brunoga/robomaster/module/robot"
 	"github.com/brunoga/robomaster/support/logger"
 )
 
@@ -44,9 +45,9 @@ var (
 	autoFireEnabledLock sync.RWMutex
 	autoFireEnabled     = true
 
-	// Fire mode: "bead" (vrai tir physique de billes), "infrared" (tir IR simulateur), "both" (billes + IR)
+	// Fire mode: "laser" (tir infrarouge / laser sans billes) ou "bead" (vrai tir mécanique de billes)
 	fireTypeLock sync.RWMutex
-	fireType     = "bead"
+	fireType     = "laser"
 
 	// Sentry Standby Mode (Left/Right continuous turret sweep)
 	standbyEnabledLock sync.RWMutex
@@ -233,36 +234,25 @@ func handleFire(w http.ResponseWriter, r *http.Request) {
 
 	if robotClient != nil && robotClient.Gun() != nil {
 		switch currentType {
-		case "infrared", "ir":
+		case "bead", "bille":
+			// Mode Bille : tir physique réel du canon (volants + alimentation mécanique)
+			err := robotClient.Gun().Fire(gun.TypeBead)
+			if err != nil {
+				logAction("ERROR", fmt.Sprintf("Erreur tir bille: %v", err))
+			} else {
+				logAction("FIRE", "💥 VRAI TIR BILLE DÉCLENCHÉ (Canon à billes de gel)")
+			}
+		default: // "laser", "infrared", "ir"
+			// Mode Laser : simulation infrarouge uniquement (pas de billes)
 			err := robotClient.Gun().Fire(gun.TypeInfrared)
 			if err != nil {
-				logAction("ERROR", fmt.Sprintf("Infrared fire error: %v", err))
+				logAction("ERROR", fmt.Sprintf("Erreur tir laser: %v", err))
 			} else {
-				logAction("FIRE", "Infrared fire triggered (simulation laser)")
-			}
-		case "both":
-			errBead := robotClient.Gun().Fire(gun.TypeBead)
-			errIR := robotClient.Gun().Fire(gun.TypeInfrared)
-			if errBead != nil {
-				logAction("ERROR", fmt.Sprintf("Real bead fire error: %v", errBead))
-			} else {
-				logAction("FIRE", "💥 VRAI TIR DU ROBOT (Bille) + Flash Infrarouge")
-			}
-			if errIR != nil {
-				logAction("WARN", fmt.Sprintf("IR flash warning: %v", errIR))
-			}
-		default: // "bead" (Vrai tir physique de billes)
-			err := robotClient.Gun().Fire(gun.TypeBead)
-			// Trigger infrared concurrently for sound effect and LED flash
-			_ = robotClient.Gun().Fire(gun.TypeInfrared)
-			if err != nil {
-				logAction("ERROR", fmt.Sprintf("Real bead fire error: %v", err))
-			} else {
-				logAction("FIRE", "💥 VRAI TIR DU ROBOT DÉCLENCHÉ (Canon à billes de gel)")
+				logAction("FIRE", "🔴 TIR LASER DÉCLENCHÉ (Infrarouge / Simulation)")
 			}
 		}
 	} else {
-		logAction("WARN", "Fire requested but Gun module or robot client not ready")
+		logAction("WARN", "Tir demandé mais module Gun ou client robot non prêt")
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
@@ -279,14 +269,17 @@ func handleFireType(w http.ResponseWriter, r *http.Request) {
 				t = body.Type
 			}
 		}
-		if t == "bead" || t == "infrared" || t == "both" || t == "ir" {
-			if t == "ir" {
-				t = "infrared"
-			}
+		t = strings.ToLower(strings.TrimSpace(t))
+		if t == "bead" || t == "bille" {
 			fireTypeLock.Lock()
-			fireType = t
+			fireType = "bead"
 			fireTypeLock.Unlock()
-			logAction("CONFIG", fmt.Sprintf("Mode de tir mis à jour: %s", t))
+			logAction("CONFIG", "Mode de tir configuré: BILLE (Canon physique)")
+		} else if t == "laser" || t == "infrared" || t == "ir" {
+			fireTypeLock.Lock()
+			fireType = "laser"
+			fireTypeLock.Unlock()
+			logAction("CONFIG", "Mode de tir configuré: LASER (Infrarouge seul)")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"ok"}`))
@@ -477,6 +470,10 @@ func main() {
 	batt := uint8(0)
 	if robotClient.Robot() != nil {
 		batt = robotClient.Robot().BatteryPowerPercent()
+		_ = robotClient.Robot().EnableFunction(robot.FunctionTypeGunControl, true)
+	}
+	if robotClient.Gun() != nil {
+		_ = robotClient.Gun().Start()
 	}
 	logAction("CONNECTION", fmt.Sprintf("Connected successfully to RoboMaster S1 (%s) - Battery: %d%%", robotIP, batt))
 
@@ -836,14 +833,13 @@ const dashboardHTML = `<!DOCTYPE html>
           <div></div>
         </div>
         <div style="margin-top: 8px;">
-          <button class="btn btn-fire" id="btnFire" onclick="fire()" style="width: 100%;">💥 VRAI TIR (Billes / Espace)</button>
+          <button class="btn btn-fire" id="btnFire" onclick="fire()" style="width: 100%;">🔴 TIR LASER (Espace)</button>
         </div>
         <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(218, 54, 51, 0.12); border: 1px solid rgba(248, 81, 73, 0.35); border-radius: 6px;">
-          <span style="font-size: 0.8rem; color: #f85149; font-weight: 600;">Type de Tir :</span>
+          <span style="font-size: 0.8rem; color: #f85149; font-weight: 600;">Mode de Tir :</span>
           <select id="fireTypeSelect" onchange="onFireTypeChange(this.value)" style="padding: 4px 8px; background: #21262d; color: #f0f6fc; border: 1px solid #30363d; border-radius: 4px; font-size: 0.78rem; cursor: pointer; outline: none;">
-            <option value="bead" selected>💥 Vrai Tir (Billes)</option>
-            <option value="both">⚡ Double (Billes + IR)</option>
-            <option value="infrared">🔴 Infrarouge seul</option>
+            <option value="laser" selected>🔴 Mode Laser (Infrarouge)</option>
+            <option value="bead">💥 Mode Bille (Canon réel)</option>
           </select>
         </div>
 
@@ -1040,12 +1036,10 @@ const dashboardHTML = `<!DOCTYPE html>
         await fetch('/api/fire_type?type=' + encodeURIComponent(val), { method: 'POST' });
         const btn = document.getElementById('btnFire');
         if (btn) {
-          if (val === 'infrared') {
-            btn.innerHTML = '🔴 TIR INFRAROUGE (Space)';
-          } else if (val === 'both') {
-            btn.innerHTML = '⚡ DOUBLE TIR (Billes + IR / Space)';
+          if (val === 'laser' || val === 'infrared') {
+            btn.innerHTML = '🔴 TIR LASER (Space)';
           } else {
-            btn.innerHTML = '💥 VRAI TIR (Billes / Space)';
+            btn.innerHTML = '💥 TIR BILLE (Space)';
           }
         }
       } catch (e) {
@@ -1059,17 +1053,12 @@ const dashboardHTML = `<!DOCTYPE html>
         if (res.ok) {
           const data = await res.json();
           if (data.type) {
+            const isLaser = (data.type === 'laser' || data.type === 'infrared');
             const sel = document.getElementById('fireTypeSelect');
-            if (sel) sel.value = data.type;
+            if (sel) sel.value = isLaser ? 'laser' : 'bead';
             const btn = document.getElementById('btnFire');
             if (btn) {
-              if (data.type === 'infrared') {
-                btn.innerHTML = '🔴 TIR INFRAROUGE (Space)';
-              } else if (data.type === 'both') {
-                btn.innerHTML = '⚡ DOUBLE TIR (Billes + IR / Space)';
-              } else {
-                btn.innerHTML = '💥 VRAI TIR (Billes / Space)';
-              }
+              btn.innerHTML = isLaser ? '🔴 TIR LASER (Space)' : '💥 TIR BILLE (Space)';
             }
           }
         }

@@ -212,14 +212,14 @@ var (
 	KeyRobomasterSystemCloseImageTransmission           = newKey("KeyRobomasterSystemCloseImageTransmission", 83886173, AccessTypeAction, nil)
 
 	KeyRobomasterWaterGunFirmwareVersion       = newKey("KeyRobomasterWaterGunFirmwareVersion", 167772161, AccessTypeRead, nil)
-	KeyRobomasterWaterGunWaterGunFire          = newKey("KeyRobomasterWaterGunWaterGunFire", 167772162, AccessTypeAction, nil)
-	KeyRobomasterWaterGunWaterGunFireWithTimes = newKey("KeyRobomasterWaterGunWaterGunFireWithTimes", 167772163, AccessTypeAction, nil)
+	KeyRobomasterWaterGunWaterGunFire          = newKey("KeyRobomasterWaterGunWaterGunFire", 167772162, AccessTypeAction, &value.Uint64{})
+	KeyRobomasterWaterGunWaterGunFireWithTimes = newKey("KeyRobomasterWaterGunWaterGunFireWithTimes", 167772163, AccessTypeAction, &value.Uint64{})
 	KeyRobomasterWaterGunShootSpeed            = newKey("KeyRobomasterWaterGunShootSpeed", 167772164, AccessTypeRead, nil)
 	KeyRobomasterWaterGunShootFrequency        = newKey("KeyRobomasterWaterGunShootFrequency", 167772165, AccessTypeRead, nil)
 
 	KeyRobomasterInfraredGunConnection      = newKey("KeyRobomasterInfraredGunConnection", 301989889, AccessTypeRead, nil)
 	KeyRobomasterInfraredGunFirmwareVersion = newKey("KeyRobomasterInfraredGunFirmwareVersion", 301989890, AccessTypeRead, nil)
-	KeyRobomasterInfraredGunInfraredGunFire = newKey("KeyRobomasterInfraredGunInfraredGunFire", 301989891, AccessTypeAction, nil)
+	KeyRobomasterInfraredGunInfraredGunFire = newKey("KeyRobomasterInfraredGunInfraredGunFire", 301989891, AccessTypeAction, &value.Uint64{})
 	KeyRobomasterInfraredGunShootFrequency  = newKey("KeyRobomasterInfraredGunShootFrequency", 301989892, AccessTypeRead, nil)
 
 	KeyRobomasterBatteryFirmwareVersion = newKey("KeyRobomasterBatteryFirmwareVersion", 218103809, AccessTypeRead, nil)

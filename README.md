@@ -34,7 +34,10 @@ Le but de ce projet est de transformer le **DJI RoboMaster S1** en une **tourell
   1. **Personne (`person`)** : algorithme calculant la personne **la plus proche** de la caméra et ignorant les personnes en arrière-plan. Protection du visage intégrée (**NO-FIRE FACE ZONE**) et visée sécurisée sur le torse.
   2. **Bouteille (`bottle`)**.
   3. **Canette de soda (`can` / `cup`)**.
-- **Verrouillage & Vrai Tir Automatique (Auto-Fire)** : dès que la cible sélectionnée est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement **1 vrai tir physique du robot (canon à billes de gel `gun.TypeBead`)** accompagné de l'impulsion sonore et lumineuse. Un sélecteur permet de basculer à tout moment entre tir réel de billes, double tir (billes + infrarouge) ou simulation infrarouge seule.
+- **Verrouillage & Tir Automatique (Auto-Fire)** : dès que la cible sélectionnée est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement un tir selon le mode configuré (identique à l'application officielle DJI iOS) :
+  - **Mode Laser (Infrarouge)** : tir de simulation laser (effets sonores, flash LED rouge tourelle, signaux IR). Les moteurs mécaniques du canon restent à l'arrêt.
+  - **Mode Bille (Gel beads)** : vrai tir physique du canon à billes de gel (`gun.TypeBead`), activant les volants d'accélération et le moteur d'alimentation mécanique.
+  - *Note : Conformément au protocole officiel DJI, les deux modes sont strictement distincts et ne sont jamais déclenchés en même temps.*
 - **Enchaînement Intelligent & Changement de Cible après Tir** : dès qu'une cible est touchée, elle est enregistrée comme éliminée (`💥 HIT`) et le robot bascule automatiquement sur la cible suivante non touchée. Si toutes les cibles en vue sont éliminées, la patrouille sentinelle 360° reprend automatiquement.
 - **Mode Standby Tourelle Sentinelle 360°** : en l'absence de cible, la tourelle effectue un balayage panoramique continu d'amplitude maximale gauche/droite. Dès qu'une cible entre dans le champ de vision, le balayage s'interrompt instantanément pour engager le suivi, le verrouillage et le tir.
 
@@ -65,7 +68,7 @@ Le système repose sur un découplage en 3 couches indépendantes :
 │  - Utilise la bibliothèque CGO + unitybridge.dll                          │
 │  - Décode le flux vidéo H264 vers RGB / JPEG                              │
 │  - Expose l'API REST (/api/gimbal, /api/fire, /api/status, /snapshot)     │
-│  - Gestionnaire de tir : Vrai Tir (Billes), Double, ou Infrarouge seul    │
+│  - Gestionnaire de tir : 2 modes officiels (Mode Laser ou Mode Bille)     │
 │  - Distribue le flux MJPEG (/video)                                       │
 │  - Centralise les cibles (/api/target) et détections (/api/detections)    │
 └──────────────────────┬─────────────────────────────▲──────────────────────┘
@@ -94,7 +97,7 @@ Le système repose sur un découplage en 3 couches indépendantes :
 │  - Rendu Canvas 60 FPS sans lag (0 calcul IA dans le navigateur)          │
 │  - Viseur dynamique (Vert = suivi, Rouge = Lock / Tir)                    │
 │  - Sélecteur de cible en direct (synchronisé avec l'IA sans redémarrage)  │
-│  - Sélecteur de mode de tir : Vrai Tir (Billes) / Double / Infrarouge     │
+│  - Sélecteur de mode de tir : Mode Laser (Infrarouge) / Mode Bille réel   │
 │  - Interrupteur marche/arrêt de l'Auto-Tir                                │
 │  - Contrôle manuel d'orientation aux flèches du clavier & Espace pour tir │
 └───────────────────────────────────────────────────────────────────────────┘
@@ -366,7 +369,9 @@ La vitesse angulaire envoyée aux moteurs de la tourelle est proportionnelle à 
 ### 11.2 Verrouillage & Déclenchement du Tir
 1. Si l'erreur combinée $|Err_X| < 0.08$ et $|Err_Y| < 0.08$ (cible dans la mire centrale), un chronomètre de verrouillage s'enclenche.
 2. Si la cible reste centrée pendant au moins **350 ms**, le statut passe à `LOCKED` (le réticule devient rouge).
-3. Le tir est déclenché (`POST /api/fire`), propulsant **une vraie bille de gel** (canon `gun.TypeBead`) tout en activant le flash laser et l'effet sonore.
+3. Le tir est déclenché (`POST /api/fire`), exécutant le mode configuré :
+   - En **Mode Bille** : déclenche le tir physique de billes de gel (volants d'expulsion + moteur d'alimentation).
+   - En **Mode Laser** : déclenche le tir infrarouge (son laser + flash LED) sans mise en marche des moteurs de billes.
 4. L'action est inscrite dans `robot_actions.log` avec l'angle de la tourelle et le pourcentage de batterie.
 5. La cible est marquée `HIT` et la tourelle engage la cible suivante.
 
@@ -377,7 +382,7 @@ La vitesse angulaire envoyée aux moteurs de la tourelle est proportionnelle à 
 Accessible à l'adresse `http://<IP_HOTE>:8080`, l'interface graphique offre :
 - **HUD Tactique Canvas 60 FPS** : Réticule vert lors du suivi, rouge clignotant lors du verrouillage et du tir.
 - **Sélecteur de Cible en Direct** : Choix entre `Canette`, `Personne`, `Bouteille` ou `Toutes les cibles` sans redémarrer le script d'IA.
-- **Sélecteur de Mode de Tir** : Choix entre `Vrai Tir (Billes)`, `Double Tir (Billes + IR)` ou `Infrarouge seul`.
+- **Sélecteur de Mode de Tir** : Choix instantané entre `Mode Laser (Infrarouge)` et `Mode Bille (Canon réel)`.
 - **Bouton Auto-Tir** : Activation / désactivation instantanée de l'autorisation de tir automatique.
 - **Bouton Sentinelle 360°** : Marche / Arrêt du balayage de patrouille automatique.
 - **Contrôle Manuel au Clavier** : Utilisation des flèches directionnelles du clavier pour orienter la tourelle manuellement, et touche Espace pour déclencher le vrai tir physique.
@@ -447,7 +452,7 @@ Exemple d'extrait réel de `robot_actions.log` :
 | `AI` | Démarrage / Arrêt du module de vision Python YOLOv8 |
 | `VISION` | Détection d'une cible autorisée avec calcul de surface (proximité) ou cible perdue de vue |
 | `LOCK` | Verrouillage confirmé au centre du réticule (marge de 10% pendant >350ms) |
-| `FIRE` | Vrai tir physique (billes) ou simulation infrarouge déclenché |
+| `FIRE` | Tir laser infrarouge ou tir physique de billes déclenché |
 | `TARGET` | Enchaînement automatique : cible touchée marquée éliminée et bascule immédiate vers la cible suivante |
 | `STANDBY` | Détection de butée mécanique et inversion du balayage sentinelle 360° |
 | `SAFETY` | Protection faciale : détection du visage, déviation automatique vers le torse et blocage du tir au visage |

@@ -48,12 +48,11 @@ class RoboMaster:
         """Immediately stops all gimbal rotation"""
         requests.post(f"{self.base_url}/api/gimbal", params={"pitch": 0, "yaw": 0})
 
-    def fire(self, fire_type="bead"):
+    def fire(self, fire_type="laser"):
         """
         Triggers robot fire:
-        - "bead" (default): Real physical gel bead shot
-        - "both": Real bead shot + IR laser flash & sound
-        - "infrared": Simulation IR only (laser sound + LED)
+        - "laser" (default): Infrared simulation laser (sound + LED flash, no beads)
+        - "bead": Real physical gel bead shot (flywheels + mechanical feed)
         """
         requests.post(f"{self.base_url}/api/fire", params={"type": fire_type})
 
