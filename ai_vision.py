@@ -802,9 +802,10 @@ class LocalVisionTracker:
                             if self.auto_fire and not self.has_fired_for_current_target and (now - self.last_fire_time > 2.0):
                                 fire_desc = f"TORSO of '{best_target_label.upper()}' (Face protected)" if is_person_target else f"target '{best_target_label.upper()}'"
                                 track_str = f" #{best_target_track_id}" if best_target_track_id else ""
-                                print(f"\n[💥💥 BOOM!] TARGET {fire_desc}{track_str} LOCKED AT CENTER -> INFRARED FIRE EXECUTED!")
-                                self.log_action("FIRE", f"Automatic infrared fire triggered on {fire_desc}{track_str}")
+                                print(f"\n[💥💥 BOOM!] TARGET {fire_desc}{track_str} LOCKED AT CENTER -> REAL SHOT EXECUTED!")
+                                self.log_action("FIRE", f"Automatic real shot triggered on {fire_desc}{track_str}")
                                 self.fire()
+
 
                                 # Mark target as HIT so the robot switches to another target
                                 if best_target_track_id is not None:

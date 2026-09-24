@@ -30,10 +30,10 @@ Le but de ce projet est de transformer le **DJI RoboMaster S1** en une **tourell
 - **Cibles restreintes & intelligentes** :
   1. **Personne (`person`)** : algorithme calculant la personne **la plus proche** de la caméra et ignorant les personnes en arrière-plan. Protection du visage intégrée (visée torse sécurisée).
   2. **Bouteille (`bottle`)**.
-  3. **Canette de soda (`can` / `cup`)**.
-- **Verrouillage & Tir Automatique (Auto-Fire)** : dès que la cible sélectionnée est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement **1 tir infrarouge unique** (son laser synthétisé + LED du canon).
+- **Verrouillage & Vrai Tir Automatique (Auto-Fire)** : dès que la cible sélectionnée est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement **1 vrai tir physique du robot (canon à billes de gel)** accompagné de l'impulsion sonore et lumineuse. Un sélecteur permet de basculer à tout moment entre tir réel de billes, double tir (billes + infrarouge) ou simulation infrarouge seule.
 - **Enchaînement Intelligent & Changement de Cible après Tir** : dès qu'une cible est touchée, elle est enregistrée comme éliminée (`💥 HIT`) et le robot bascule automatiquement sur la cible suivante non touchée. Si toutes les cibles en vue sont éliminées, la patrouille sentinelle 360° reprend automatiquement.
 - **Mode Standby Tourelle Sentinelle 360°** : en l'absence de cible, la tourelle effectue un balayage panoramique continu d'amplitude maximale gauche/droite. Dès qu'une cible entre dans le champ de vision, le balayage s'interrompt instantanément pour engager le suivi, le verrouillage et le tir.
+
 
 ---
 
@@ -261,14 +261,19 @@ Le fichier source [`robomaster/cmd/server/main.go`](file:///c:/Users/mev/Downloa
    - Au flux MJPEG multi-clients sur `/video`.
    - À l'endpoint de capture instantanée sur `/snapshot`.
 3. **Sécurité Totale du Châssis** : À l'initialisation et à chaque commande, la fonction `stopChassis()` est invoquée, maintenant les 4 moteurs de roues à une vitesse de 0.
-4. **API REST de Contrôle** :
+4. **Gestion Complète des Tirs (Vrai Tir & Infrarouge)** :
+   - `POST /api/fire` : Déclenche par défaut un **vrai tir physique du robot (canon à billes de gel `gun.TypeBead`)** synchronisé avec le flash lumineux et le son laser. Un paramètre optionnel `?type=bead|both|infrared` permet de forcer un type de tir spécifique.
+   - `GET / POST /api/fire_type?type=bead|both|infrared` : Permet de consulter ou modifier à chaud le mode de tir actif.
+5. **API REST Complète** :
    - `POST /api/gimbal?pitch=P&yaw=Y` : Ajuste la vitesse de rotation de la tourelle.
-   - `POST /api/fire` : Déclenche un tir infrarouge unique (impulsion LED + son).
+   - `POST /api/fire` : Déclenche le tir (vrai tir par défaut ou selon configuration).
+   - `GET / POST /api/fire_type` : Mode de tir (billes, double, infrarouge).
    - `GET /api/status` : Retourne l'état de connexion et le pourcentage de batterie.
    - `POST /api/target?target=can|person|bottle|all` : Change la cible active.
    - `POST /api/autofire?enabled=true|false` : Active ou désactive le tir automatique.
    - `POST /api/standby?enabled=true|false` : Active ou désactive le balayage sentinelle 360°.
    - `GET /api/logs` : Fournit le journal d'activité en temps réel.
+
 
 ---
 
@@ -322,7 +327,7 @@ La vitesse angulaire envoyée aux moteurs de la tourelle est proportionnelle à 
 ### 10.2 Verrouillage & Déclenchement du Tir
 1. Si l'erreur combinée $|Err_X| < 0.08$ et $|Err_Y| < 0.08$ (cible dans la mire centrale), un chronomètre de verrouillage s'enclenche.
 2. Si la cible reste centrée pendant au moins **350 ms**, le statut passe à `LOCKED` (le réticule devient rouge).
-3. Le tir infrarouge est déclenché (`POST /api/fire`).
+3. Le tir est déclenché (`POST /api/fire`), propulsant **une vraie bille de gel** (canon `gun.TypeBead`) tout en activant le flash laser et l'effet sonore.
 4. L'action est inscrite dans `robot_actions.log` avec l'angle de la tourelle et le pourcentage de batterie.
 5. La cible est marquée `HIT` et la tourelle engage la cible suivante.
 
@@ -333,10 +338,12 @@ La vitesse angulaire envoyée aux moteurs de la tourelle est proportionnelle à 
 Accessible à l'adresse `http://<IP_HOTE>:8080`, l'interface graphique offre :
 - **HUD Tactique Canvas 60 FPS** : Réticule vert lors du suivi, rouge clignotant lors du verrouillage et du tir.
 - **Sélecteur de Cible en Direct** : Choix entre `Canette`, `Personne`, `Bouteille` ou `Toutes les cibles` sans redémarrer le script d'IA.
-- **Bouton Auto-Tir** : Activation / désactivation instantanée de l'autorisation de tir.
+- **Sélecteur de Mode de Tir** : Choix entre `Vrai Tir (Billes)`, `Double Tir (Billes + IR)` ou `Infrarouge seul`.
+- **Bouton Auto-Tir** : Activation / désactivation instantanée de l'autorisation de tir automatique.
 - **Bouton Sentinelle 360°** : Marche / Arrêt du balayage de patrouille automatique.
-- **Contrôle Manuel au Clavier** : Utilisation des flèches directionnelles du clavier pour orienter la tourelle manuellement, et touche Espace pour faire feu.
+- **Contrôle Manuel au Clavier** : Utilisation des flèches directionnelles du clavier pour orienter la tourelle manuellement, et touche Espace pour déclencher le vrai tir physique.
 - **Console de Journal d'Action** : Visualisation en direct des tirs et détections.
+
 
 ---
 

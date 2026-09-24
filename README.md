@@ -1,39 +1,39 @@
-# Documentation Complète : Contrôle, Vision IA Locale & Suivi de Cible DJI RoboMaster S1
+# Documentation Complète : Contrôle, Vision IA Locale & Suivi de Cible DJI RoboMaster S1 (PC & Raspberry Pi)
 
-Ce guide fournit une documentation technique complète, de A à Z, permettant à quiconque ne connaissant pas le projet de le comprendre, de le reproduire et de le faire fonctionner sur un PC Windows avec un **DJI RoboMaster S1**.
+Ce guide fournit une documentation technique complète, de A à Z, permettant à **toute personne ne connaissant pas le projet** de le comprendre, de l'installer et de le faire fonctionner soit sur un **PC (Windows)**, soit sur un **Raspberry Pi (Linux ARM64)** connecté à un **DJI RoboMaster S1**.
 
 ---
 
 ## Sommaire
 1. [Vue d'Ensemble & Objectifs du Projet](#1-vue-densemble--objectifs-du-projet)
 2. [Architecture Globale du Système](#2-architecture-globale-du-système)
-3. [Prérequis Matériels & Logiciels](#3-prérequis-matériels--logiciels)
-4. [Étape 1 : Connexion Réseau au Robot (Wi-Fi & IP)](#4-étape-1--connexion-réseau-au-robot-wi-fi--ip)
-5. [Étape 2 : Le Cœur CGO / Go (`robomaster_server.exe`)](#5-étape-2--le-cœur-cgo--go-robomaster_serverexe)
-6. [Étape 3 : Historique des Problèmes & Pourquoi l'IA est sur PC](#6-étape-3--historique-des-problèmes--pourquoi-lia-est-sur-pc)
-7. [Étape 4 : L'IA Locale PC (Python & YOLOv8)](#7-étape-4--lia-locale-pc-python--yolov8)
-8. [Étape 5 : Algorithme de Ciblage & Filtrage Intelligent](#8-étape-5--algorithme-de-ciblage--filtrage-intelligent)
-9. [Étape 6 : Algorithme de Suivi Tourelle & Tir Automatique](#9-étape-6--algorithme-de-suivi-tourelle--tir-automatique)
-10. [Étape 7 : Le Cockpit Web Tactique (Port 8080)](#10-étape-7--le-cockpit-web-tactique-port-8080)
-11. [Étape 8 : Guide d'Utilisation Pas à Pas](#11-étape-8--guide-dutilisation-pas-à-pas)
-12. [Étape 9 : Journal des Actions & Fichier de Log (`robot_actions.log`)](#12-étape-9--journal-des-actions--fichier-de-log-robot_actionslog)
+3. [Arborescence Complète des Fichiers](#3-arborescence-complète-des-fichiers)
+4. [Connexion Réseau au Robot (Wi-Fi & IP)](#4-connexion-réseau-au-robot-wi-fi--ip)
+5. [Déploiement sur Raspberry Pi (Guide Pas à Pas)](#5-déploiement-sur-raspberry-pi-guide-pas-à-pas)
+6. [Déploiement sur PC Windows (Guide Pas à Pas)](#6-déploiement-sur-pc-windows-guide-pas-à-pas)
+7. [Fonctionnement du Cœur Serveur Go & UnityBridge](#7-fonctionnement-du-cœur-serveur-go--unitybridge)
+8. [Module d'IA Vision Locale (Python & YOLOv8)](#8-module-dia-vision-locale-python--yolov8)
+9. [Algorithme de Ciblage & Filtrage Intelligent](#9-algorithme-de-ciblage--filtrage-intelligent)
+10. [Algorithme d'Asservissement Tourelle & Tir Automatique](#10-algorithme-dasservissement-tourelle--tir-automatique)
+11. [Le Cockpit Web Tactique (Port 8080)](#11-le-cockpit-web-tactique-port-8080)
+12. [Optimisations Spécifiques au Raspberry Pi (NCNN & Performance)](#12-optimisations-spécifiques-au-raspberry-pi-ncnn--performance)
 13. [Résolution des Pannes (Troubleshooting)](#13-résolution-des-pannes-troubleshooting)
-14. [Arborescence des Fichiers du Projet](#14-arborescence-des-fichiers-du-projet)
 
 ---
 
 ## 1. Vue d'Ensemble & Objectifs du Projet
 
-Le but de ce projet est de transformer le **DJI RoboMaster S1** en une tourelle de surveillance autonome et intelligente pilotée par PC :
-- **Sécurité totale en intérieur** : les roues du robot sont **100% désactivées**, éliminant tout risque de mouvement intempestif ou d'emballement au sol. Seule la caméra / tourelle pivote.
-- **Cockpit Web ultra-fluide (60 FPS)** : affichage du flux vidéo HD en temps réel sans latence avec réticule tactique HUD.
-- **IA de détection sur PC** : exécution locale du modèle neuronal **YOLOv8 nano** sur le processeur du PC (~10-15 ms d'inférence), garantissant 0% de charge sur le navigateur.
+Le but de ce projet est de transformer le **DJI RoboMaster S1** en une **tourelle sentinelle de surveillance autonome et intelligente** pilotée sans fil par un PC ou un Raspberry Pi :
+- **Sécurité totale en intérieur** : les roues du châssis sont **strictement verrouillées et désactivées**, éliminant tout risque de mouvement incontrôlé ou de chute. Seuls la caméra et les axes de la tourelle (Pitch / Yaw) pivotent.
+- **Cockpit Web ultra-fluide (60 FPS)** : affichage du flux vidéo HD en direct sans saccade avec réticule tactique (HUD Canvas). Accessible depuis n'importe quel navigateur (PC, smartphone, tablette) sur le réseau local.
+- **IA de détection locale (YOLOv8)** : exécution du modèle de détection d'objets en local sur la machine hôte (0% de charge sur le navigateur web).
 - **Cibles restreintes & intelligentes** :
-  1. **Personne** : algorithme calculant la personne **la plus proche** de la caméra et ignorant toutes les autres en arrière-plan.
-  2. **Bouteille** (`bottle`).
-- **Verrouillage & Tir Automatique (Auto-Fire)** : dès que la cible choisie est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement **1 tir infrarouge unique** (son laser + LED).
+  1. **Personne (`person`)** : algorithme calculant la personne **la plus proche** de la caméra et ignorant les personnes en arrière-plan. Protection du visage intégrée (visée torse sécurisée).
+  2. **Bouteille (`bottle`)**.
+- **Verrouillage & Vrai Tir Automatique (Auto-Fire)** : dès que la cible sélectionnée est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement **1 vrai tir physique du robot (canon à billes de gel)** accompagné de l'impulsion sonore et lumineuse. Un sélecteur permet de basculer à tout moment entre tir réel de billes, double tir (billes + infrarouge) ou simulation infrarouge seule.
 - **Enchaînement Intelligent & Changement de Cible après Tir** : dès qu'une cible est touchée, elle est enregistrée comme éliminée (`💥 HIT`) et le robot bascule automatiquement sur la cible suivante non touchée. Si toutes les cibles en vue sont éliminées, la patrouille sentinelle 360° reprend automatiquement.
-- **Mode Standby Tourelle Sentinelle 360° (Actif par défaut)** : en l'absence de cible, le canon du robot effectue un balayage panoramique complet en tournant au maximum à gauche puis au maximum à droite (couvrant 360° et toute l'amplitude mécanique disponible sans angle mort). Dès qu'un objet ciblé entre dans le champ de vision, le balayage s'interrompt instantanément pour engager le suivi, le verrouillage et le tir.
+- **Mode Standby Tourelle Sentinelle 360°** : en l'absence de cible, la tourelle effectue un balayage panoramique continu d'amplitude maximale gauche/droite. Dès qu'une cible entre dans le champ de vision, le balayage s'interrompt instantanément pour engager le suivi, le verrouillage et le tir.
+
 
 ---
 
@@ -55,8 +55,8 @@ Le système repose sur un découplage en 3 couches indépendantes :
                                        │
                                        ▼
 ┌───────────────────────────────────────────────────────────────────────────┐
-│                          SERVEUR LOCAL EN GO                              │
-│                 (robomaster_server.exe - Port 8080)                       │
+│                    SERVEUR LOCAL EN GO (Port 8080)                        │
+│               (Exécuté sur PC Windows ou Raspberry Pi via Wine/Box64)     │
 │                                                                           │
 │  - Utilise la bibliothèque CGO + unitybridge.dll                          │
 │  - Décode le flux vidéo H264 vers RGB / JPEG                              │
@@ -69,10 +69,10 @@ Le système repose sur un découplage en 3 couches indépendantes :
                        │                             │ /api/fire (Auto-tir)
                        ▼                             │ /api/detections (HUD)
 ┌────────────────────────────────────────┐           │
-│         IA LOCALE SUR PC               │           │
-│   (ai_vision.py - Python YOLOv8)       ├───────────┘
+│        IA LOCALE (Python YOLOv8)       │           │
+│         (ai_vision.py)                 ├───────────┘
 │                                        │
-│  - YOLOv8 nano (~10-15 ms sur CPU)     │
+│  - YOLOv8 nano (Inférence CPU/NEON)    │
 │  - Filtre personne la plus proche      │
 │  - Détection bouteille / canette       │
 │  - Calcul d'erreur PID & centrage      │
@@ -84,7 +84,7 @@ Le système repose sur un découplage en 3 couches indépendantes :
                        ▼
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                       COCKPIT WEB HTML5 / CANVAS                          │
-│                       (http://localhost:8080)                             │
+│                       (http://<IP_HOTE>:8080)                             │
 │                                                                           │
 │  - Rendu Canvas 60 FPS sans lag (0 calcul IA dans le navigateur)          │
 │  - Viseur dynamique (Vert = suivi, Rouge = Lock / Tir)                    │
@@ -96,398 +96,315 @@ Le système repose sur un découplage en 3 couches indépendantes :
 
 ---
 
-## 3. Prérequis Matériels & Logiciels
+## 3. Arborescence Complète des Fichiers
 
-### Matériel :
-- 1× Robot **DJI RoboMaster S1** (avec batterie chargée et insérée).
-- 1× PC fonctionnant sous **Windows 10 ou Windows 11** (avec carte Wi-Fi).
+Voici l'arborescence des fichiers du projet :
 
-### Logiciels installés sur le PC :
-1. **Go (Golang)** version 1.20 ou plus récente ([golang.org](https://go.dev/)).
-2. **MinGW-w64 (GCC)** : obligatoire pour compiler en mode CGO (`CGO_ENABLED=1`).
-   - Exemple d'emplacement GCC utilisé dans le projet : `C:\Users\<user>\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin`.
-3. **Python** version 3.10 ou supérieure ([python.org](https://www.python.org/)).
-4. **unitybridge.dll** : bibliothèque dynamique 64 bits de communication DJI (présente dans le dossier du projet).
+```
+Robomaster S1/
+│
+├── AGENTS.md                   # Règles strictes de maintenance du projet et de documentation
+├── README.md                   # Documentation d'origine
+├── documentation.md            # La présente documentation technique exhaustive (PC & Raspberry Pi)
+│
+├── requirements.txt            # Dépendances Python (ultralytics, opencv, requests, numpy)
+├── setup_rpi.sh                # Script d'installation automatique pour Raspberry Pi 64-bit
+├── start_all.sh                # Script de lancement tout-en-un pour Raspberry Pi / Linux
+├── start_all.bat               # Lanceur rapide Windows (Batch)
+├── start_all.ps1               # Lanceur complet Windows (PowerShell)
+│
+├── ai_vision.py                # Cœur de l'IA de vision locale (YOLOv8, asservissement tourelle, tir auto)
+├── detect_objects.py           # Script de test de détection simple
+├── robomaster_api.py           # Bibliothèque cliente Python simplifiée pour interagir avec le serveur Go
+├── robot_actions.log           # Fichier journal horodaté de toutes les actions du robot
+│
+├── robomaster_server.exe       # Binaire exécutable Windows du serveur Go
+├── unitybridge.dll             # Bibliothèque dynamique DJI requise pour communiquer avec le robot
+├── yolov8n.pt                  # Poids neuronaux YOLOv8 nano (détection des objets)
+├── yolov8n-pose.pt             # Poids neuronaux YOLOv8 pose (protection du visage & ciblage torse)
+│
+└── robomaster/                 # Code source complet du module Go & UnityBridge
+    ├── client.go               # Client principal de connexion au robot
+    ├── go.mod                  # Dépendances Go
+    ├── go.sum                  # Sommes de contrôle Go
+    ├── build.ps1               # Script de compilation Go Windows
+    ├── robomaster_server.exe   # Copie locale du binaire serveur
+    ├── unitybridge.dll         # Copie locale de la DLL UnityBridge
+    │
+    ├── cmd/
+    │   └── server/
+    │       └── main.go         # Code source du serveur HTTP, décodeur vidéo et API REST
+    │
+    ├── module/                 # Modules de contrôle matériel
+    │   ├── camera/             # Gestion du flux vidéo H264
+    │   ├── chassis/            # Contrôle du châssis (désactivé pour sécurité)
+    │   ├── gimbal/             # Contrôle de la tourelle (Pitch & Yaw)
+    │   ├── gun/                # Contrôle du canon (tir infrarouge)
+    │   ├── robot/              # Batterie, état du système
+    │   ├── controller/         # Gestionnaire de contrôle
+    │   ├── gamepad/            # Gestionnaire de manette
+    │   └── sdcard/             # Carte SD du robot
+    │
+    ├── unitybridge/            # Wrapper Go de la bibliothèque UnityBridge DJI
+    │   ├── wrapper/            # Bindings CGO
+    │   └── install/            # Outils d'installation des bibliothèques
+    │
+    └── support/                # Utilitaires (PID, Logger, Découverte réseau, Chiffrement)
+```
 
 ---
 
-## 4. Étape 1 : Connexion Réseau au Robot (Wi-Fi & IP)
+## 4. Connexion Réseau au Robot (Wi-Fi & IP)
 
 Le DJI RoboMaster S1 supporte deux modes de connexion Wi-Fi :
 
-### Méthode recommandée : Mode Routeur
-1. Basculez le commutateur Wi-Fi situé sur le contrôleur intelligent du S1 sur la position **Routeur** (icône antenne / réseau).
-2. Allumez le robot.
-3. Le robot se connecte à votre réseau Wi-Fi local (ou à un point d'accès partagé).
-4. Déterminez l'adresse IP du robot :
-   - Par défaut dans notre configuration : **`10.156.149.194`**.
-   - Vous pouvez également la vérifier sur l'interface de votre box/routeur ou via l'application mobile DJI RoboMaster dans les paramètres réseau.
-5. Vérifiez la connectivité depuis le terminal de votre PC :
-   ```cmd
+### Mode 1 : Connexion Directe (Robot = Point d'Accès Wi-Fi)
+1. Basculer le commutateur situé derrière la caméra du robot sur la position **Wi-Fi** (icône antenne).
+2. Allumer le robot (un appui court puis un appui long sur le bouton batterie).
+3. Sur votre Raspberry Pi ou PC, connectez-vous au réseau Wi-Fi diffusé par le robot :
+   - **SSID** : `RM-S1_XXXXXX` (affiché sur l'étiquette sous le robot).
+   - **Mot de passe par défaut** : `12341234`
+4. L'adresse IP du robot en mode direct est généralement :
+   - `192.168.2.1`
+
+### Mode 2 : Mode Routeur (Robot et Hôte connectés à la même Box / Routeur) - Recommandé
+1. Configurer le robot via l'application mobile DJI RoboMaster pour qu'il rejoigne votre réseau Wi-Fi local (ou le point d'accès de votre box).
+2. Le robot obtient une adresse IP sur votre réseau local (par exemple : `10.156.149.194` ou `192.168.1.50`).
+3. Connectez le Raspberry Pi (ou le PC) au même réseau Wi-Fi ou par câble Ethernet.
+4. Vérifiez la connectivité réseau avec un ping :
+   ```bash
    ping 10.156.149.194
    ```
-   Si les paquets répondent avec moins de 10 ms de latence, la liaison est opérationnelle.
 
 ---
 
-## 5. Étape 2 : Le Cœur CGO / Go (`robomaster_server.exe`)
+## 5. Déploiement sur Raspberry Pi (Guide Pas à Pas)
 
-### 5.1 Pourquoi du Go et du CGO ?
-DJI ne fournit pas d'API REST standard ouverte. La communication bas niveau s'effectue via une bibliothèque native propriétaire nommée `unitybridge.dll`.
-Le projet utilise le wrapper open-source créé par Bruno Gama (`github.com/brunoga/robomaster`) qui encapsule `unitybridge.dll` en Go.
+### 5.1 Matériel Recommandé
+- **Raspberry Pi 4 (4 Go ou 8 Go)** ou **Raspberry Pi 5 (4 Go ou 8 Go)**.
+- Carte microSD (32 Go minimum, classe A2 recommandée) ou SSD USB3.
+- Système d'exploitation : **Raspberry Pi OS 64-bit (Debian Bookworm)**.  
+  *(Attention : un OS 32-bit n'est pas compatible avec PyTorch 64-bit et Box64).*
+- Alimentation officielle Raspberry Pi (pour éviter les sous-tensions lors de l'inférence IA).
 
-### 5.2 Sécurisation du robot (Blocage des roues)
-Dans le code source [`robomaster/cmd/server/main.go`](file:///c:/Users/mev/Downloads/Robomaster%20S1/robomaster/cmd/server/main.go) :
-- Les appels au châssis ont été bridés.
-- Dès la connexion, la fonction `stopChassis()` est exécutée à 3 reprises pour neutraliser tout résidu de commande.
-- L'endpoint `/api/move` renvoie un statut `disabled`.
-- Les seules commandes motrices actives sont celles de la tourelle : `robotClient.Gimbal().SetRotationSpeed(pitch, yaw)` et `robotClient.Gimbal().StopRotation()`.
+### 5.2 Pourquoi Box64 + Wine sur Raspberry Pi ?
+DJI fournit la bibliothèque propriétaire `unitybridge` uniquement sous forme de binaire Windows x86_64 (`unitybridge.dll`) et de bibliothèque Android Bionic (`libunitybridge.so`). DJI ne fournit aucun binaire natif GNU/Linux glibc.
+Pour exécuter le serveur Go sur le processeur ARM64 du Raspberry Pi, la solution standard et éprouvée consiste à utiliser **Box64** (émulateur d'instructions x86_64 vers ARM64 haute performance) combiné à **Wine64**. Cela permet d'exécuter `robomaster_server.exe` avec une consommation CPU minime (~5-10%), tandis que l'IA Vision tourne **nativement** en Python 64-bit sur les cœurs ARM du Pi.
 
-### 5.3 Compilation du serveur
-Un script PowerShell dédié [`build.ps1`](file:///c:/Users/mev/Downloads/Robomaster%20S1/robomaster/build.ps1) gère la compilation avec le compilateur GCC :
-```powershell
-$gccDir = "C:\Users\mev\AppData\Local\Microsoft\WinGet\Packages\BrechtSanders.WinLibs.POSIX.UCRT_Microsoft.Winget.Source_8wekyb3d8bbwe\mingw64\bin"
-$env:PATH = "$gccDir;C:\Program Files\Go\bin;$env:PATH"
-$env:CGO_ENABLED = "1"
-$env:CC = "gcc"
+### 5.3 Installation en 1 Commande sur le Raspberry Pi
 
-go build -o robomaster_server.exe .\cmd\server\main.go
+1. Clonez le projet ou copiez les fichiers sur votre Raspberry Pi :
+   ```bash
+   git clone git@github.com:mevyona/robomaster.git
+   cd robomaster
+   ```
+
+2. Rendez le script d'installation exécutable et lancez-le :
+   ```bash
+   chmod +x setup_rpi.sh start_all.sh
+   ./setup_rpi.sh
+   ```
+   Ce script installe automatiquement :
+   - Les paquets système Linux nécessaires (`python3-venv`, `libgl1`, etc.).
+   - **Box64** et **Wine64** via les dépôts optimisés ARM64.
+   - L'environnement virtuel Python `.venv` et les bibliothèques d'IA (`ultralytics`, `opencv-python-headless`, `requests`, `numpy`).
+
+### 5.4 Lancement du Système sur le Raspberry Pi
+
+Lancez l'ensemble (Serveur + IA Vision) en une seule commande en spécifiant l'adresse IP du robot :
+
+```bash
+./start_all.sh 10.156.149.194
 ```
-Une fois généré, `robomaster_server.exe` est copié à la racine du projet avec `unitybridge.dll`.
+*(Remplacez `10.156.149.194` par l'IP de votre robot).*
 
-### 5.4 Points de terminaison HTTP exposés
-| Méthode | Route | Rôle |
-|---|---|---|
-| `GET` | `/` | Tableau de bord Web HTML5 tactique |
-| `GET` | `/video` | Flux vidéo en continu (MJPEG) |
-| `GET` | `/snapshot` | Image JPEG instantanée (pour l'analyse Python) |
-| `POST` / `GET` | `/api/gimbal?pitch=P&yaw=Y` | Contrôle d'orientation de la tourelle |
-| `POST` | `/api/fire` | Déclenche 1 tir infrarouge |
-| `GET` | `/api/status` | Retourne la batterie et l'état de connexion |
-| `GET` / `POST` | `/api/target` | Lecture et mise à jour de la cible active |
-| `GET` / `POST` | `/api/autofire` | Activation ou coupure du tir automatique |
-| `GET` / `POST` | `/api/standby` | Activation ou coupure du mode standby (balayage tourelle) |
-| `GET` / `POST` | `/api/detections` | Échange des boîtes de détection entre le PC et l'UI |
-
----
-
-## 6. Étape 3 : Historique des Problèmes & Pourquoi l'IA est sur PC
-
-### Le problème initial (L'IA dans le navigateur) :
-Au début du projet, la détection d'objets avait été intégrée en JavaScript dans la page web à l'aide de la bibliothèque TensorFlow.js / Coco-SSD.
-Cette approche s'est révélée catastrophique :
-1. **Surcharge CPU** : Traiter un flux vidéo 720p en JavaScript sature le thread principal du navigateur.
-2. **Effondrement des FPS** : La page web freezait et tombait à 1-2 images par seconde.
-3. **Saturation du pool HTTP** : Chrome limite les connexions concurrentes sur un même hôte à 6 sockets. Le flux vidéo plus les appels constants de l'IA saturaient le pool. Les commandes `/api/gimbal` d'orientation de la caméra étaient bloquées en file d'attente, ce qui empêchait le robot de suivre quoi que ce soit.
-
-### La solution : Découplage complet
-Nous avons retiré **100% de l'IA du navigateur** :
-- Le navigateur ne fait plus **aucun calcul lourd**. Il reçoit simplement des coordonnées (X, Y, Largeur, Hauteur) et les dessine sur un Canvas à 60 FPS constants.
-- L'IA s'exécute sur le processeur du PC via Python et le modèle ultra-optimisé **YOLOv8 nano**.
-
----
-
-## 7. Étape 4 : L'IA Locale PC (Python & YOLOv8)
-
-### 7.1 L'environnement virtuel Python
-Un environnement dédié `.venv` a été configuré à la racine pour isoler les dépendances.
-Les paquets installés sont :
-- `ultralytics` : framework YOLOv8
-- `torch` et `torchvision` : moteur d'inférence PyTorch
-- `opencv-python` : traitement d'image et décodage
-- `requests` : requêtes HTTP ultra-rapides vers le serveur local
-- `numpy` : calculs vectoriels
-
-### 7.2 Le modèle YOLOv8 nano (`yolov8n.pt`)
-- **Poids** : ~6 Mo seulement.
-- **Temps d'inférence** : ~10 à 15 ms sur un processeur PC standard.
-- **Cadence** : 15 à 20 FPS réguliers.
-- **Seuil de confiance (`conf`)** : Réglé à `0.25` pour une détection vive et sensible, évitant de rater des objets légèrement inclinés.
-
----
-
-## 8. Étape 5 : Algorithme de Ciblage & Filtrage Intelligent
-
-Le script [`ai_vision.py`](file:///c:/Users/mev/Downloads/Robomaster%20S1/ai_vision.py) applique un filtrage strict pour ne tolérer que les 3 objets demandés :
-
-```python
-# Classes COCO acceptées
-- "person"  -> Catégorie Personne
-- "bottle"  -> Catégorie Bouteille
-- "cup"     -> Catégorie Canette de soda (canette / cup)
+### 5.5 Accès au Cockpit Web depuis n'importe où
+Une fois lancé sur le Raspberry Pi, ouvrez un navigateur web depuis n'importe quel ordinateur, tablette ou smartphone connecté au même réseau :
 ```
-
-### Règles de Sélection des Cibles
-1. **Humains (Personnes)** :
-   - Si plusieurs personnes sont visibles dans la pièce, l'algorithme calcule la surface de chaque boîte englobante ($\text{Surface} = \text{Largeur} \times \text{Hauteur}$) et conserve **uniquement la personne la plus proche** (la plus grande silhouette). Toutes les autres en arrière-plan sont écartées pour éviter toute hésitation de ciblage.
-2. **Bouteilles & Canettes / Cups** :
-   - Toutes les bouteilles et canettes visibles dans le champ de vision sont conservées et répertoriées dans le tracker spatial.
-   - Le robot engage d'abord la cible la plus proche / grande. Dès qu'elle a reçu un tir infrarouge, elle est marquée comme touchée (`💥 HIT`) et le robot bascule automatiquement sur la bouteille ou canette suivante.
+http://<ADRESSE_IP_DU_RASPBERRY_PI>:8080
+```
+Exemple : `http://192.168.1.45:8080`
 
 ---
 
-## 9. Étape 6 : Algorithme de Suivi Tourelle & Tir Automatique
+## 6. Déploiement sur PC Windows (Guide Pas à Pas)
 
-### 9.1 Asservissement de la Tourelle & Décélération Progressive (Fine Aiming Controller)
-Pour amener la cible au centre de la mire avec une précision chirurgicale sans à-coups ni oscillations :
-1. Calcul de l'écart relatif par rapport au centre de l'image :
-   $$\text{err}_x = \frac{x_{\text{centre cible}} - \frac{\text{Largeur}}{2}}{\frac{\text{Largeur}}{2}} \quad (\in [-1.0, 1.0])$$
-   $$\text{err}_y = \frac{y_{\text{centre cible}} - \frac{\text{Hauteur}}{2}}{\frac{\text{Hauteur}}{2}} \quad (\in [-1.0, 1.0])$$
-2. **Zone morte ultra-fine (Deadband à 4%)** : si $|\text{err}_x| \le 0.04$ et $|\text{err}_y| \le 0.04$, la vitesse envoyée est `0` pour garantir une stabilité totale et éliminer tout micro-tremblement.
-3. **Courbe de décélération progressive (Plus le viseur approche, plus il ralentit)** :
-   - Quand la cible est éloignée du centre ($|\text{err}| \approx 1.0$), la tourelle tourne rapidement (jusqu'à 48°/s en lacet et 35°/s en tangage) pour intercepter la cible sans délai.
-   - À mesure que le réticule se rapproche du centre ($|\text{err}| \to 0.04$), la vitesse décélère de façon non-linéaire (courbe d'amortissement en puissance 1.3) pour descendre graduellement jusqu'à **7°/s en horizontal** et **6°/s en vertical**.
-   - Ce micro-pilotage amorti supprime tout dépassement (overshoot) et permet un pointage ultra-précis et naturel.
+### 6.1 Prérequis Logiciels
+1. **Python 3.10 ou 3.11** (avec la case "Add Python to PATH" cochée lors de l'installation).
+2. **Git** pour Windows.
+3. Les poids YOLOv8 (`yolov8n.pt` et `yolov8n-pose.pt`, déjà inclus dans le dépôt).
 
-### 9.2 Verrouillage (Lock) & Tir Unique
-1. Si $|\text{err}_x| < 0.10$ et $|\text{err}_y| < 0.10$ (cible stabilisée dans le réticule central à 10%) :
-   - Un chronomètre `lock_start_time` s'enclenche.
-2. Si la cible reste centrée pendant plus de **350 millisecondes** :
-   - Le statut passe à **`LOCKED`**.
-   - Le réticule devient **rouge vif** sur le site et trace une ligne laser pointillée vers la cible (ou vers le torse si c'est un humain).
-3. **Déclenchement du tir** :
-   - Si l'Auto-Tir est activé et que le robot n'a pas encore tiré sur cette cible :
-     - Appel immédiat à `POST /api/fire`.
-     - Le robot émet le son du tir laser et fait clignoter ses diodes.
-     - L'écran affiche : `💥💥 CIBLE TOUCHÉE - TIR EFFECTUÉ ! 💥💥`.
-     - Un délai de temporisation (cooldown de 2.5 secondes) bloque tout tir intempestif supplémentaire.
+### 6.2 Installation sur Windows
+1. Ouvrez un terminal PowerShell dans le dossier du projet :
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
 
-### 9.3 Mode Standby Tourelle Sentinelle 360° (Actif par Défaut)
-Lorsque le robot est allumé et qu'aucun objet ciblé n'est présent dans le champ de vision :
-1. **Balayage panoramique 360° (Max Gauche ⇄ Max Droite)** :
-   - La tourelle pivote automatiquement jusqu'au maximum mécanique à gauche, puis pivote dans l'autre sens jusqu'au maximum mécanique à droite à une vitesse douce et régulière de **22°/s** (vitesse diminuée pour une patrouille calme et une clarté vidéo maximale sans flou de bougé).
-   - Ce balayage parcourt toute l'amplitude physique disponible (~500°, bien au-delà de 360°), inspectant l'intégralité de la pièce et de l'environnement sans aucun angle mort.
-2. **Adaptation Dynamique de la Durée de Rotation selon la Vitesse ($\Delta t = \frac{\Delta \theta}{v}$)** :
-   - Afin de garantir une couverture panoramique complète à 360° même à vitesse ralentie, la durée maximale de chaque demi-tour est calculée dynamiquement :
-     $$T_{\text{sweep}} = \frac{\theta_{\text{amplitude}}}{v_{\text{standby}}} + \text{marge}$$
-   - À 22°/s, la durée allouée est automatiquement ajustée à ~23.3 secondes (au lieu de l'ancien délai fixe de 10s qui coupait la rotation à 220°). La tourelle a ainsi le temps physique nécessaire pour parcourir les 480° complets d'une butée à l'autre sans jamais inverser prématurément.
-3. **Interruption instantanée à la détection** :
-   - Dès qu'une cible autorisée (la personne la plus proche, une bouteille ou une canette) entre dans le champ de la caméra, **le balayage est immédiatement interrompu**.
-   - L'asservissement PID prend instantanément le relais pour centrer la tourelle sur la cible et enclencher la séquence de verrouillage.
-4. **Reprise de la patrouille** :
-   - Si la cible sort du champ ou disparaît, un court délai de grâce (0.6 seconde) évite les à-coups avant que le balayage sentinelle 360° ne reprenne automatiquement.
-
-### 9.4 Détection des Butées Mécaniques & Résolution d'Angle Mort (Rotation 360° Unwind)
-
-Le servomoteur de lacet (yaw) du RoboMaster S1 dispose d'une plage mécanique d'environ -250° à +250° (500° au total). Deux problématiques physiques majeures sont résolues par des algorithmes autonomes :
-
-1. **Détection Active de Butée en Mode Standby** :
-   - Au lieu d'utiliser un simple chronomètre fixe, l'IA interroge en direct la télémétrie angulaire du servomoteur (`/api/status`).
-   - Dès que le servomoteur atteint la butée physique (angle `yaw >= +235°` ou `yaw <= -235°`, ou calage mécanique sans progression angulaire pendant >0.3s), le système détecte la fin de course et inverse immédiatement la rotation sans forcer sur les moteurs.
-
-2. **Résolution de l'Angle Mort (Target in Dead Zone -> 360° Unwind)** :
-   - **Problème** : Si la tourelle a atteint sa butée mécanique maximale (ex: +250° à droite) et qu'un objet est détecté sur le bord droit de l'image, le servomoteur ne peut physiquement plus tourner à droite pour le centrer. Sans algorithme adapté, le robot resterait bloqué contre la butée.
-   - **Solution** : Dès que l'IA détecte que le servomoteur est en butée alors que la cible requiert de tourner plus loin dans cette direction, elle enclenche automatiquement une **rotation d'évitement à 360° dans le sens inverse** (vers la gauche à 52°/s).
-   - La tourelle effectue un tour complet et ré-attrape l'objet depuis l'angle ouvert opposé (ex: à -110° au lieu de +250°).
-   - Dès que la cible réapparaît dans la zone de centrage, le suivi actif, le verrouillage et le tir reprennent automatiquement avec une pleine liberté de mouvement.
-
-### 9.5 Sécurité Humaine : Interdiction de Tir au Visage & Déviation Automatique vers le Torse (Face Protection & Body Retargeting)
-
-Pour des raisons impératives de sécurité, le robot intègre un verrouillage logiciel strict empêchant tout tir infrarouge dirigé vers un visage humain :
-
-1. **Extraction de Pose et Détection du Visage (YOLOv8-Pose + Modèle Anthropométrique)** :
-   - Lorsqu'une personne est suivie, l'IA analyse la silhouette à l'aide du modèle de pose `yolov8n-pose.pt`.
-   - Les points clés anatomiques du visage (nez, yeux, oreilles) délimitent une **zone d'exclusion visage prioritaire** (`Face Exclusion Zone`). En cas d'occlusion partielle ou de faible luminosité, un modèle anthropométrique standard (zone supérieure de la silhouette) assure une protection continue.
-2. **Définition de la Cible Corporelle Sécurisée (Torse / Buste)** :
-   - Au lieu de viser le centre géométrique d'une personne (qui peut correspondre au cou ou au menton si la personne est assise ou cadrée à mi-buste), la visée est automatiquement déportée sur le **torse / buste** (point médian entre les épaules et le bassin).
-3. **Asservissement et Déviation Dynamique en Cas de Visée Visage** :
-   - Si la ligne de tir (le centre du réticule de la caméra) se trouve à l'intérieur de la zone du visage ou pointe vers celui-ci :
-     - **Interdiction Formelle de Tir** : Le système bloque instantanément toute autorisation de tir (`auto_fire` inhibé).
-     - **Déviation Automatique Immédiate** : La tourelle incline son canon vers le bas (pitch négatif) pour déplacer le réticule hors du visage et s'aligner sur le torse.
-     - L'action de sécurité est consignée dans les logs : `[SAFETY] Aiming at human face -> Retargeted aim to CHEST/TORSO (Face shot prevented)`.
-4. **Verrouillage et Tir Exclusif sur le Torse** :
-   - Le tir automatique ne peut se déclencher que si le réticule est stabilisé sur le point sécurisé du torse et que le visage est totalement dégagé.
-   - Si seule la tête d'une personne est visible dans l'image (sans buste sécurisé atteignable), le robot incline la tourelle vers le bas et **refuse catégoriquement de tirer**.
-5. **Restitution Visuelle sur le Cockpit Web et le HUD** :
-   - Le visage est entouré d'un cadre orange pointillé avec la mention `🚫 NO-FIRE: FACE`.
-   - Le torse affiche une mire avec réticule et la mention `🎯 TORSO`.
-   - Si la tourelle passe sur la zone visage, le bandeau HUD indique en orange : `⚠️ FACE PROTECTION ACTIVE: RETARGETING TO TORSO (FIRE INHIBITED)`.
-   - Le tracé laser rouge pointillé relie le centre du viseur directement au **torse** (et jamais au visage).
-
-### 9.6 Enchaînement et Changement Automatique de Cible après Tir (Target Switching & Hit Registry)
-
-Lors d'un engagement multi-cibles (ex. plusieurs canettes de soda ou bouteilles disposées dans l'environnement) :
-
-1. **Registre de Suivi Spatial Persistant (`SimpleObjectTracker`)** :
-   - Chaque détection dans le flux vidéo se voit attribuer un identifiant unique persistant (`Track ID` : ex. `CAN #1`, `CAN #2`, etc.).
-   - Le tracker associe les boîtes englobantes d'une trame à l'autre via la distance euclidienne des centroïdes et l'orientation angulaire absolue estimée dans le repère monde ($\theta_{\text{monde}} = \theta_{\text{tourelle}} + \text{err}_x \times 48^\circ$).
-2. **Élimination Immédiate de la Cible Touchée (`is_hit = True`)** :
-   - Dès que le tir infrarouge est validé sur la cible verrouillée :
-     - La cible est marquée comme éliminée (`is_hit = True`) dans le registre avec une mémoire temporaire de 30 secondes.
-     - L'action est journalisée : `[TARGET] Target 'CAN #1' hit -> Switching to next available target`.
-     - L'état de tir de la session est immédiatement réarmé pour permettre à la cible suivante d'être verrouillée et engagée sans blocage.
-3. **Bascule Immédiate vers la Cible Suivante** :
-   - L'algorithme de ciblage exclut systématiquement toute cible marquée `is_hit = True`.
-   - Si une autre cible non touchée est déjà présente dans le champ de vision (ex. `CAN #2`), le robot pivote immédiatement vers elle, la centre, la verrouille et fait feu.
-4. **Reprise Automatique du Balayage Sentinelle si Toutes les Cibles en Vue sont Touchées** :
-   - Si la cible touchée était la seule visible dans le champ de la caméra, ou dès lors que toutes les cibles du champ ont été touchées :
-     - Le système repasse en état de recherche active (`best_target_box = None`).
-     - Le mode sentinelle 360° reprend automatiquement son balayage panoramique pour chercher d'autres cibles dans le reste de la pièce.
-5. **Affichage Distinctif sur le HUD Web et OpenCV** :
-   - **Cibles touchées** : encadrées en pointillés orange ambré (`#d97706`) avec le badge distinctif `💥 HIT #ID (ELIMINATED)`.
-   - **Bandeau de statut** : affiche `💥💥 TARGET HIT! SWITCHING TO NEXT TARGET... 💥💥`.
-   - **Nouvelle cible active** : encadrée en vert (ou rouge si verrouillée) et prête à être engagée.
-
----
-
-## 10. Étape 7 : Le Cockpit Web Tactique (Port 8080)
-
-Accessible à l'adresse **`http://localhost:8080`** :
-- **Flux Vidéo** : En direct sans délai.
-- **Réticule Tactique HUD** :
-  - Cercle vert au repos.
-  - Cercle et étiquettes rouges lors d'un verrouillage.
-  - Coins tactiques dessinés autour des cibles.
-- **Menu déroulant des cibles (Cible active par défaut : Canette / Cup de soda)** :
-  - `🥫 Canette de soda / Cup` **(Actif par défaut au démarrage)**
-  - `👤 Personne (la plus proche uniquement)`
-  - `🍾 Bouteille`
-  - `🎯 Toutes les 3 cibles`
-  *(Changer la cible dans la liste bascule instantanément l'IA Python sans aucun rechargement de page).*
-- **Interrupteur Auto-Tir** : Case à cocher permettant de couper ou d'armer le tir automatique d'un clic.
-- **Interrupteur Mode Standby (Tourelle)** : Case à cocher permettant d'activer ou désactiver le balayage automatique en veille (actif par défaut).
-- **Bannière d'état HUD** :
-  - `📡 MODE VEILLE : BALAYAGE TOURELLE (PATROUILLE)` en veille.
-  - `VISION: X OBJET(S) DÉTECTÉ(S)` lors du suivi.
-  - `🔒 CIBLE VERROUILLÉE AU CENTRE (LOCK)` lors du verrouillage.
-  - `💥💥 TIR EFFECTUÉ ! CIBLE TOUCHÉE 💥💥` lors du tir.
-- **Commandes Manuelles de Secours** :
-  - Touches fléchées <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> : pilotage manuel de la tourelle.
-  - Touche <kbd>Espace</kbd> : tir infrarouge manuel.
-
----
-
-## 11. Étape 8 : Guide d'Utilisation Pas à Pas
-
-### Démarrage Tout-en-Un (1 Seul Clic Recommandé) :
-
-Au lieu de lancer deux fichiers séparément, vous disposez d'un **lanceur unique global** qui démarre le serveur, ouvre le Cockpit Web, lance l'IA et coupe tout automatiquement à la fermeture :
-
-#### Option 1 : Depuis l'Explorateur Windows (Double-clic)
-Double-cliquez simplement sur :
-👉 [**`start_all.bat`**](file:///c:/Users/mev/Downloads/Robomaster%20S1/start_all.bat)
-
-#### Option 2 : Dans votre Terminal PowerShell
+### 6.3 Lancement sur Windows
+Exécutez simplement le script PowerShell :
 ```powershell
 .\start_all.ps1
 ```
-*(Vous pouvez aussi spécifier des options : `.\start_all.ps1 --target canette` ou `.\start_all.ps1 --no-standby`)*
-
-Ce script tout-en-un prend automatiquement en charge :
-1. Le démarrage du serveur Go (`robomaster_server.exe`) en arrière-plan.
-2. L'ouverture de votre navigateur sur `http://localhost:8080`.
-3. Le lancement direct de l'IA locale (YOLOv8 nano) **sans aucune saisie ni question dans le terminal CMD** : le robot démarre immédiatement sa surveillance.
-4. **Contrôle 100% via l'interface web** : le choix de la cible (Personne, Bouteille, Canette, Toutes), l'Auto-Tir et le Mode Standby 360° sont modifiables en direct d'un simple clic sur le Cockpit.
-5. La fermeture propre du serveur et des processus associés dès que vous fermez la fenêtre ou pressez `Ctrl+C`.
+Le script démarre automatiquement le serveur Go, ouvre votre navigateur sur `http://localhost:8080`, et démarre l'IA de vision locale.
 
 ---
 
-## 12. Étape 9 : Journal des Actions & Fichier de Log (`robot_actions.log`)
+## 7. Fonctionnement du Cœur Serveur Go & UnityBridge
 
-Afin d'assurer une traçabilité totale et un audit rigoureux de toutes les opérations effectuées par le robot et son système de vision, un **journal d'actions centralisé** est automatiquement alimenté dans le fichier :
-👉 [**`robot_actions.log`**](file:///c:/Users/mev/Downloads/Robomaster%20S1/robot_actions.log) (situé à la racine du projet).
+Le fichier source [`robomaster/cmd/server/main.go`](file:///c:/Users/mev/Downloads/Robomaster%20S1/robomaster/cmd/server/main.go) compile le binaire `robomaster_server.exe`.
 
-### Format des Entrées du Log :
-Chaque événement est consigné avec horodatage exact à la seconde, catégorie et description claire de l'action :
-```text
-[AAAA-MM-JJ HH:MM:SS] [CATEGORIE] Description de l'action
+### Fonctionnalités principales :
+1. **Connexion & Authentification au Robot** : Établit la liaison TCP/UDP sécurisée via l'API `unitybridge`.
+2. **Décodage Vidéo H264 vers JPEG** : La caméra DJI envoie un flux continu de trames H264. Le callback vidéo Go décode chaque trame en image RGB/JPEG et la transmet :
+   - Au flux MJPEG multi-clients sur `/video`.
+   - À l'endpoint de capture instantanée sur `/snapshot`.
+3. **Sécurité Totale du Châssis** : À l'initialisation et à chaque commande, la fonction `stopChassis()` est invoquée, maintenant les 4 moteurs de roues à une vitesse de 0.
+4. **Gestion Complète des Tirs (Vrai Tir & Infrarouge)** :
+   - `POST /api/fire` : Déclenche par défaut un **vrai tir physique du robot (canon à billes de gel `gun.TypeBead`)** synchronisé avec le flash lumineux et le son laser. Un paramètre optionnel `?type=bead|both|infrared` permet de forcer un type de tir spécifique.
+   - `GET / POST /api/fire_type?type=bead|both|infrared` : Permet de consulter ou modifier à chaud le mode de tir actif.
+5. **API REST Complète** :
+   - `POST /api/gimbal?pitch=P&yaw=Y` : Ajuste la vitesse de rotation de la tourelle.
+   - `POST /api/fire` : Déclenche le tir (vrai tir par défaut ou selon configuration).
+   - `GET / POST /api/fire_type` : Mode de tir (billes, double, infrarouge).
+   - `GET /api/status` : Retourne l'état de connexion et le pourcentage de batterie.
+   - `POST /api/target?target=can|person|bottle|all` : Change la cible active.
+   - `POST /api/autofire?enabled=true|false` : Active ou désactive le tir automatique.
+   - `POST /api/standby?enabled=true|false` : Active ou désactive le balayage sentinelle 360°.
+   - `GET /api/logs` : Fournit le journal d'activité en temps réel.
+
+
+---
+
+## 8. Module d'IA Vision Locale (Python & YOLOv8)
+
+Le script [`ai_vision.py`](file:///c:/Users/mev/Downloads/Robomaster%20S1/ai_vision.py) assure l'intelligence artificielle en local :
+
+- **Pas de latence navigateur** : Le modèle YOLOv8 nano tourne entièrement sur le processeur de la machine hôte.
+- **Récupération des images** : Télécharge les images JPEG fraîches depuis `/snapshot` à ~15-20 FPS.
+- **Analyse & Détection** : Détecte les objets présents dans l'image avec un seuil de confiance paramétrable (défaut : 25%).
+- **Envoi des détections au Cockpit Web** : Les coordonnées normalisées des boîtes englobantes, le statut de verrouillage (`is_locked`) et les tirs (`just_fired`) sont envoyés via `POST /api/detections` pour affichage sur le HUD Canvas du navigateur.
+
+---
+
+## 9. Algorithme de Ciblage & Filtrage Intelligent
+
+### 9.1 Filtrage Strict des Objets
+Seules les 3 classes de cibles suivantes sont retenues, toutes les autres détections sont écartées :
+- `person` (classe COCO 0)
+- `bottle` (classe COCO 39)
+- `cup` / `can` (classe COCO 41)
+
+### 9.2 Règle de la Personne la Plus Proche
+Si plusieurs personnes sont visibles dans le champ de la caméra, l'algorithme calcule la surface de la boîte englobante ($Surface = Largeur \times Hauteur$). La personne ayant la surface la plus grande (donc la plus proche du robot) est sélectionnée comme cible prioritaire. Les personnes en arrière-plan sont ignorées.
+
+### 9.3 Protection du Visage & Visée Sécurisée du Torse
+Grâce au modèle `yolov8n-pose.pt`, les points clés anatomiques humains (yeux, nez, épaules, hanches) sont extraits :
+- Une zone d'exclusion stricte (**NO-FIRE FACE ZONE**) est définie autour de la tête.
+- Le point de visée est automatiquement déplacé au centre du torse.
+- Tout tir est immédiatement bloqué si le canon pointe vers la tête.
+
+### 9.4 Suivi des Cibles et Mémoire d'Élimination (`SimpleObjectTracker`)
+- Chaque objet détecté se voit attribuer un identifiant unique (`track_id`).
+- Lorsqu'une cible est verrouillée et qu'un tir est émis, elle est marquée comme **éliminée (`💥 HIT`)** pendant un temps de refroidissement (cooldown de 30 secondes).
+- La tourelle ne s'attarde pas sur une cible déjà touchée et bascule automatiquement sur la cible suivante non touchée.
+- Dès que toutes les cibles en vue sont éliminées, la patrouille sentinelle 360° reprend.
+
+---
+
+## 10. Algorithme d'Asservissement Tourelle & Tir Automatique
+
+### 10.1 Asservissement Proportionnel (PID)
+Le centre de l'image est défini à $(X=320, Y=180)$ pour une résolution de $640 \times 360$.  
+L'erreur horizontale ($Err_X$) et verticale ($Err_Y$) entre le centre de la cible et le centre du réticule est calculée :
+$$Err_X = \frac{Center_X - 320}{320}, \quad Err_Y = \frac{Center_Y - 180}{180}$$
+
+La vitesse angulaire envoyée aux moteurs de la tourelle est proportionnelle à cette erreur :
+- Si la cible est loin du centre : vitesse élevée pour un recadrage rapide.
+- Si la cible approche du centre : décélération douce pour éviter les oscillations (zone morte de $\pm 3\%$).
+
+### 10.2 Verrouillage & Déclenchement du Tir
+1. Si l'erreur combinée $|Err_X| < 0.08$ et $|Err_Y| < 0.08$ (cible dans la mire centrale), un chronomètre de verrouillage s'enclenche.
+2. Si la cible reste centrée pendant au moins **350 ms**, le statut passe à `LOCKED` (le réticule devient rouge).
+3. Le tir est déclenché (`POST /api/fire`), propulsant **une vraie bille de gel** (canon `gun.TypeBead`) tout en activant le flash laser et l'effet sonore.
+4. L'action est inscrite dans `robot_actions.log` avec l'angle de la tourelle et le pourcentage de batterie.
+5. La cible est marquée `HIT` et la tourelle engage la cible suivante.
+
+---
+
+## 11. Le Cockpit Web Tactique (Port 8080)
+
+Accessible à l'adresse `http://<IP_HOTE>:8080`, l'interface graphique offre :
+- **HUD Tactique Canvas 60 FPS** : Réticule vert lors du suivi, rouge clignotant lors du verrouillage et du tir.
+- **Sélecteur de Cible en Direct** : Choix entre `Canette`, `Personne`, `Bouteille` ou `Toutes les cibles` sans redémarrer le script d'IA.
+- **Sélecteur de Mode de Tir** : Choix entre `Vrai Tir (Billes)`, `Double Tir (Billes + IR)` ou `Infrarouge seul`.
+- **Bouton Auto-Tir** : Activation / désactivation instantanée de l'autorisation de tir automatique.
+- **Bouton Sentinelle 360°** : Marche / Arrêt du balayage de patrouille automatique.
+- **Contrôle Manuel au Clavier** : Utilisation des flèches directionnelles du clavier pour orienter la tourelle manuellement, et touche Espace pour déclencher le vrai tir physique.
+- **Console de Journal d'Action** : Visualisation en direct des tirs et détections.
+
+
+---
+
+## 12. Optimisations Spécifiques au Raspberry Pi (NCNN & Performance)
+
+Sur un Raspberry Pi 4 ou 5, plusieurs optimisations permettent d'augmenter le nombre d'images par seconde (FPS) de l'IA :
+
+### 1. Utilisation du format NCNN (Recommandé sur Raspberry Pi 4/5)
+NCNN est un framework d'inférence de réseaux neuronaux développé par Tencent, ultra-optimisé pour les processeurs ARM avec instructions NEON.  
+Pour exporter le modèle YOLOv8 nano au format NCNN :
+```bash
+source .venv/bin/activate
+yolo export model=yolov8n.pt format=ncnn
 ```
-
-Exemple d'extrait réel de `robot_actions.log` :
-```text
-[2026-09-24 10:11:00] [SYSTEM] Initialized DJI RoboMaster S1 action log
-[2026-09-24 10:14:02] [CONNECTION] Connected successfully to RoboMaster S1 (10.156.149.194) - Battery: 84%
-[2026-09-24 10:14:05] [AI] Local AI vision started (Target: CAN, Conf: 25%, AutoFire: True, Standby: True)
-[2026-09-24 10:14:07] [STANDBY] Sentry turret sweep towards right
-[2026-09-24 10:14:10] [STANDBY] Sentry turret sweep towards left
-[2026-09-24 10:14:11] [STANDBY] Servomotor reached physical limit at MAX LEFT -> Reversing sweep towards RIGHT ➔
-[2026-09-24 10:14:12] [VISION] Target 'PERSON (CLOSEST)' detected (Area: 42560 px)
-[2026-09-24 10:14:12] [UNWIND] Target in blind spot at MAX RIGHT limit -> Initiating 360° rotation to the LEFT
-[2026-09-24 10:14:16] [UNWIND] Target re-acquired from open angle -> Resuming active tracking
-[2026-09-24 10:14:17] [SAFETY] Aiming at human face -> Retargeted aim to CHEST/TORSO (Face shot prevented)
-[2026-09-24 10:14:18] [LOCK] Target 'TORSO of PERSON (CLOSEST)' locked at crosshair center (Face clear)
-[2026-09-24 10:14:18] [FIRE] Automatic infrared fire triggered on TORSO of 'PERSON (CLOSEST)' (Face protected)
-[2026-09-24 10:14:13] [FIRE] Infrared fire triggered
-[2026-09-24 10:14:16] [CONFIG] AI target changed via Web Cockpit: 'PERSON' -> 'BOTTLE'
-[2026-09-24 10:14:20] [TURRET] Turret movement: pitch=0 yaw=40
-[2026-09-24 10:14:21] [TURRET] Turret rotation stopped
-[2026-09-24 10:14:35] [AI] Local AI vision stopped, turret halted
-[2026-09-24 10:14:36] [DISCONNECTION] Server stopped and robot disconnected
+Cela génère un dossier `yolov8n_ncnn_model/`. YOLOv8 peut ensuite charger ce modèle directement :
+```python
+model = YOLO("yolov8n_ncnn_model")
 ```
+*Gain observé : passage de ~7 FPS (PyTorch CPU) à **25-30+ FPS** sur Raspberry Pi 5 !*
 
-### Événements Journalisés :
-| Catégorie | Description & Déclencheur |
-| :--- | :--- |
-| `CONNECTION` | Connexion réussie du serveur Go au robot via Wi-Fi avec relevé du % de batterie |
-| `DISCONNECTION` | Coupure propre du serveur, arrêt des moteurs et déconnexion |
-| `AI` | Démarrage / Arrêt du module de vision Python YOLOv8 |
-| `VISION` | Détection d'une cible autorisée avec calcul de surface (proximité) ou cible perdue de vue |
-| `LOCK` | Verrouillage confirmé au centre du réticule (marge de 12% pendant >350ms) |
-| `FIRE` | Tir infrarouge physique déclenché (automatique après verrouillage ou manuel via Espace/Web) |
-| `TARGET` | Enchaînement automatique : cible touchée marquée éliminée et bascule immédiate vers la cible suivante |
-| `STANDBY` | Détection de butée mécanique et inversion du balayage sentinelle 360° |
-| `UNWIND` | Rotation complète à 360° déclenchée lorsqu'une cible se trouve dans l'angle mort mécanique en butée |
-| `SAFETY` | Protection faciale : détection du visage, déviation automatique vers le torse et blocage du tir au visage |
-| `TURRET` | Mouvements manuels de la tourelle (début de rotation, vitesse, arrêt) |
-| `CONFIG` | Modification de la cible active, activation/désactivation d'Auto-Tir ou du mode Standby |
-| `ERROR` | Signalement d'éventuelles erreurs matérielles ou réseau |
-
-### Comment Consulter les Logs :
-1. **Directement dans le Cockpit Web** : Cliquez sur le bouton bleu **`📜 Voir Logs`** situé dans l'en-tête en haut de page, ou ouvrez l'URL :
-   👉 `http://localhost:8080/api/logs`
-2. **Dans le fichier texte** : Ouvrez [**`robot_actions.log`**](file:///c:/Users/mev/Downloads/Robomaster%20S1/robot_actions.log) dans n'importe quel éditeur de texte (Bloc-notes, VS Code...).
-3. **En temps réel dans le terminal PowerShell** :
-   ```powershell
-   Get-Content -Path robot_actions.log -Wait -Tail 20
-   ```
+### 2. Réduire la taille de résolution d'inférence (imgsz)
+Par défaut, YOLOv8 traite les images en $640 \times 640$. Sur Raspberry Pi 4, spécifier une résolution de 320 ou 416 pixels divise le temps de calcul par 2 tout en conservant une excellente précision pour des personnes et canettes à moyenne distance :
+```python
+results = self.model(frame, imgsz=320, conf=self.conf_threshold)
+```
 
 ---
 
 ## 13. Résolution des Pannes (Troubleshooting)
 
-### Q : PowerShell affiche `The term 'start_all.bat' is not recognized`
-- **Cause** : Par mesure de sécurité, Windows PowerShell n'exécute pas les scripts du dossier courant sans préfixe.
-- **Solution** : Écrivez `.\start_all.ps1` ou `.\start_all.bat`.
+### Problème 1 : `Failed to connect to RoboMaster S1 (10.156.149.194)`
+- **Cause** : L'adresse IP du robot a changé ou le Raspberry Pi / PC n'est pas sur le même réseau Wi-Fi.
+- **Solution** :
+  1. Vérifiez l'adresse IP attribuée au robot sur votre box ou via l'application DJI.
+  2. Testez le ping : `ping <IP_DU_ROBOT>`.
+  3. Relancez le script en passant la nouvelle adresse : `./start_all.sh <NOUVELLE_IP>`.
 
-### Q : L'IA ne repère pas un objet placé devant la caméra
-- **Distance** : La caméra du RoboMaster S1 a une focale fixe. À moins de 25 cm, l'image est floue. Placez-vous ou tenez l'objet entre **40 cm et 2 mètres**.
-- **Cible sélectionnée** : Vérifiez que l'objet correspond bien à la cible choisie (ex : si la cible est sur `personne`, une canette ne sera pas verrouillée).
-- **Pour une personne** : Il faut que le buste ou le corps entier soit dans le champ pour que l'IA le classifie avec certitude comme `personne`.
+### Problème 2 : `The UnityBridge library is not available` ou erreur DLL sur Raspberry Pi
+- **Cause** : `robomaster_server.exe` a été lancé directement sans Box64 et Wine.
+- **Solution** : Exécutez `./setup_rpi.sh` pour installer Box64 et Wine64, puis utilisez toujours `./start_all.sh` qui configure l'environnement d'émulation automatiquement.
 
-### Q : Erreur `No connection could be made because the target machine actively refused it`
-- **Cause** : Le script Python d'IA a été lancé avant le serveur Go.
-- **Solution** : Utilisez simplement `start_all.bat` (ou `.\start_all.ps1`) : le script gère automatiquement l'ordre et le délai de démarrage.
+### Problème 3 : Le flux vidéo ne s'affiche pas sur le Cockpit Web (`/video` noir ou chargement infini)
+- **Cause** : Le robot est en veille ou la caméra n'a pas été initialisée par le bridge.
+- **Solution** :
+  1. Redémarrez le robot (appui court puis long sur la batterie).
+  2. Redémarrez le serveur avec `./start_all.sh`.
+
+### Problème 4 : Pas de tir automatique alors que la cible est centrée
+- **Cause** : L'Auto-Tir est désactivé dans le cockpit web ou le délai de centrage (350 ms) n'a pas été atteint.
+- **Solution** :
+  1. Vérifiez que le bouton `Auto-Tir : ACTIF` est activé dans le cockpit web (`http://<IP>:8080`).
+  2. Vérifiez que la cible n'est pas déjà marquée `HIT` (temps de réactivation de 30 secondes).
+
+### Problème 5 : Erreur `Le paquet « libatlas-base-dev » n'a pas de version susceptible d'être installée`
+- **Cause** : `libatlas-base-dev` est un ancien paquet obsolète supprimé des versions modernes de Debian 12 (Bookworm) et 13 (Trixie).
+- **Solution** : Il est remplacé par `libopenblas-dev`. Le script [`setup_rpi.sh`](file:///c:/Users/mev/Downloads/Robomaster%20S1/setup_rpi.sh) a été mis à jour pour installer automatiquement `libopenblas-dev`. Si vous effectuez une installation manuelle :
+  ```bash
+  sudo apt install -y python3 python3-pip python3-venv python3-dev git curl wget libgl1 libgomp1 libopenblas-dev
+  ```
 
 ---
+*Ce document est maintenu à jour à chaque modification du projet conformément aux directives d'`AGENTS.md`.*
 
-## 14. Arborescence des Fichiers du Projet
 
-```text
-Robomaster S1/
-│
-├── DOCUMENTATION.md          <-- Cette documentation technique complète
-├── robot_actions.log         <-- Journal complet et horodaté de toutes les actions du robot
-├── start_all.bat             <-- 1-CLIC UNIQUE : Lance le Serveur + Web + IA en 1 clic
-├── start_all.ps1             <-- 1-CLIC PowerShell : Lance le Serveur + Web + IA
-│
-├── ai_vision.py              <-- Moteur IA : YOLOv8 nano, filtrage, asservissement tourelle & auto-tir
-├── robomaster_api.py         <-- Bibliothèque d'aide Python pour requêter le serveur
-├── detect_objects.py         <-- Script d'inspection console simple
-│
-├── yolov8n.pt                <-- Modèle IA YOLOv8 nano (détection : personne, bouteille, canette)
-├── yolov8n-pose.pt           <-- Modèle IA YOLOv8 pose (analyse corporelle, protection visage & visée torse)
-│
-├── robomaster_server.exe     <-- Exécutable serveur Go compilé avec CGO
-├── unitybridge.dll           <-- Pilote dynamique officiel DJI 64 bits
-│
-├── .venv/                    <-- Environnement virtuel Python (Torch, Ultralytics, OpenCV)
-│
-└── robomaster/               <-- Code source Go du serveur
-    ├── build.ps1             <-- Script de compilation GCC/MinGW
-    ├── go.mod                <-- Dépendances Go
-    ├── client.go             <-- Wrapper du client S1
-    ├── cmd/
-    │   └── server/
-    │       └── main.go       <-- Point d'entrée HTTP, décodage vidéo, API, journalisation & Cockpit HTML5
-    └── module/               <-- Modules bas niveau (camera, chassis, gimbal, gun...)
-```

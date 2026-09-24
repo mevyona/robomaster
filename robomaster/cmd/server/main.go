@@ -44,9 +44,14 @@ var (
 	autoFireEnabledLock sync.RWMutex
 	autoFireEnabled     = true
 
+	// Fire mode: "bead" (vrai tir physique de billes), "infrared" (tir IR simulateur), "both" (billes + IR)
+	fireTypeLock sync.RWMutex
+	fireType     = "bead"
+
 	// Sentry Standby Mode (Left/Right continuous turret sweep)
 	standbyEnabledLock sync.RWMutex
 	standbyEnabled     = true
+
 
 	// Action log file mutex
 	logFileLock sync.Mutex
@@ -217,17 +222,83 @@ func handleGimbal(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleFire(w http.ResponseWriter, r *http.Request) {
+	typ := r.URL.Query().Get("type")
+	fireTypeLock.RLock()
+	currentType := fireType
+	fireTypeLock.RUnlock()
+
+	if typ != "" {
+		currentType = typ
+	}
+
 	if robotClient != nil && robotClient.Gun() != nil {
-		err := robotClient.Gun().Fire(gun.TypeInfrared)
-		if err != nil {
-			logAction("ERROR", fmt.Sprintf("Infrared fire error: %v", err))
-		} else {
-			logAction("FIRE", "Infrared fire triggered")
+		switch currentType {
+		case "infrared", "ir":
+			err := robotClient.Gun().Fire(gun.TypeInfrared)
+			if err != nil {
+				logAction("ERROR", fmt.Sprintf("Infrared fire error: %v", err))
+			} else {
+				logAction("FIRE", "Infrared fire triggered (simulation laser)")
+			}
+		case "both":
+			errBead := robotClient.Gun().Fire(gun.TypeBead)
+			errIR := robotClient.Gun().Fire(gun.TypeInfrared)
+			if errBead != nil {
+				logAction("ERROR", fmt.Sprintf("Real bead fire error: %v", errBead))
+			} else {
+				logAction("FIRE", "💥 VRAI TIR DU ROBOT (Bille) + Flash Infrarouge")
+			}
+			if errIR != nil {
+				logAction("WARN", fmt.Sprintf("IR flash warning: %v", errIR))
+			}
+		default: // "bead" (Vrai tir physique de billes)
+			err := robotClient.Gun().Fire(gun.TypeBead)
+			// Trigger infrared concurrently for sound effect and LED flash
+			_ = robotClient.Gun().Fire(gun.TypeInfrared)
+			if err != nil {
+				logAction("ERROR", fmt.Sprintf("Real bead fire error: %v", err))
+			} else {
+				logAction("FIRE", "💥 VRAI TIR DU ROBOT DÉCLENCHÉ (Canon à billes de gel)")
+			}
 		}
+	} else {
+		logAction("WARN", "Fire requested but Gun module or robot client not ready")
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`))
 }
+
+func handleFireType(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		t := r.URL.Query().Get("type")
+		if t == "" {
+			var body struct {
+				Type string `json:"type"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err == nil && body.Type != "" {
+				t = body.Type
+			}
+		}
+		if t == "bead" || t == "infrared" || t == "both" || t == "ir" {
+			if t == "ir" {
+				t = "infrared"
+			}
+			fireTypeLock.Lock()
+			fireType = t
+			fireTypeLock.Unlock()
+			logAction("CONFIG", fmt.Sprintf("Mode de tir mis à jour: %s", t))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok"}`))
+		return
+	}
+	fireTypeLock.RLock()
+	ft := fireType
+	fireTypeLock.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"type": ft})
+}
+
 
 func handleAutoFire(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
@@ -437,6 +508,7 @@ func main() {
 	http.HandleFunc("/api/stop", handleStop)
 	http.HandleFunc("/api/gimbal", handleGimbal)
 	http.HandleFunc("/api/fire", handleFire)
+	http.HandleFunc("/api/fire_type", handleFireType)
 	http.HandleFunc("/api/status", handleStatus)
 	http.HandleFunc("/api/detections", handleDetections)
 	http.HandleFunc("/api/target", handleTarget)
@@ -764,8 +836,17 @@ const dashboardHTML = `<!DOCTYPE html>
           <div></div>
         </div>
         <div style="margin-top: 8px;">
-          <button class="btn btn-fire" id="btnFire" onclick="fire()" style="width: 100%;">💥 INFRARED FIRE (Space)</button>
+          <button class="btn btn-fire" id="btnFire" onclick="fire()" style="width: 100%;">💥 VRAI TIR (Billes / Espace)</button>
         </div>
+        <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; background: rgba(218, 54, 51, 0.12); border: 1px solid rgba(248, 81, 73, 0.35); border-radius: 6px;">
+          <span style="font-size: 0.8rem; color: #f85149; font-weight: 600;">Type de Tir :</span>
+          <select id="fireTypeSelect" onchange="onFireTypeChange(this.value)" style="padding: 4px 8px; background: #21262d; color: #f0f6fc; border: 1px solid #30363d; border-radius: 4px; font-size: 0.78rem; cursor: pointer; outline: none;">
+            <option value="bead" selected>💥 Vrai Tir (Billes)</option>
+            <option value="both">⚡ Double (Billes + IR)</option>
+            <option value="infrared">🔴 Infrarouge seul</option>
+          </select>
+        </div>
+
       </div>
 
       <!-- Instructions -->
@@ -953,6 +1034,49 @@ const dashboardHTML = `<!DOCTYPE html>
       } catch (e) {}
     }
     fetchCurrentTarget();
+
+    async function onFireTypeChange(val) {
+      try {
+        await fetch('/api/fire_type?type=' + encodeURIComponent(val), { method: 'POST' });
+        const btn = document.getElementById('btnFire');
+        if (btn) {
+          if (val === 'infrared') {
+            btn.innerHTML = '🔴 TIR INFRAROUGE (Space)';
+          } else if (val === 'both') {
+            btn.innerHTML = '⚡ DOUBLE TIR (Billes + IR / Space)';
+          } else {
+            btn.innerHTML = '💥 VRAI TIR (Billes / Space)';
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function fetchCurrentFireType() {
+      try {
+        const res = await fetch('/api/fire_type');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.type) {
+            const sel = document.getElementById('fireTypeSelect');
+            if (sel) sel.value = data.type;
+            const btn = document.getElementById('btnFire');
+            if (btn) {
+              if (data.type === 'infrared') {
+                btn.innerHTML = '🔴 TIR INFRAROUGE (Space)';
+              } else if (data.type === 'both') {
+                btn.innerHTML = '⚡ DOUBLE TIR (Billes + IR / Space)';
+              } else {
+                btn.innerHTML = '💥 VRAI TIR (Billes / Space)';
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    fetchCurrentFireType();
+
 
     // Boucle de rendu graphique du HUD (60 FPS, zéro calcul CPU, fluide à 100%)
     function renderHUD() {

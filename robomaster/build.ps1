@@ -8,7 +8,8 @@ $env:CC = "gcc"
 Write-Host "Compilation du serveur RoboMaster..."
 & $goExe build -o robomaster_server.exe .\cmd\server\main.go
 if ($LASTEXITCODE -eq 0) {
-    Write-Host "[+] Compilation réussie : robomaster_server.exe généré !" -ForegroundColor Green
+    Copy-Item -Path robomaster_server.exe -Destination ..\robomaster_server.exe -Force -ErrorAction SilentlyContinue
+    Write-Host "[+] Compilation réussie : robomaster_server.exe généré et synchronisé !" -ForegroundColor Green
 } else {
     Write-Host "[!] Échec de la compilation" -ForegroundColor Red
 }
