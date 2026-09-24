@@ -22,7 +22,7 @@ from ultralytics import YOLO
 
 # Supported targets
 ALLOWED_TARGETS = {
-    "1": ("person", "Person (closest only)"),
+    "1": ("person", "Person"),
     "2": ("bottle", "Bottle"),
     "3": ("can", "Soda can"),
     "4": ("all", "All 3 targets (Person, Bottle, Can)")
@@ -534,13 +534,11 @@ class LocalVisionTracker:
         print("\n" + "=" * 60)
         print("   DJI ROBOMASTER S1 AI VISION: PERSON / BOTTLE / CAN")
         print("=" * 60)
-        target_display = "PERSON (CLOSEST ONLY)" if self.target == "person" else self.target.upper()
-        print(f"[•] Active Target     : {target_display}")
+        print(f"[•] Active Target     : {self.target.upper()}")
         print(f"[•] Confidence Thresh : {int(self.conf_threshold * 100)}%")
         print(f"[•] Automatic Fire    : {'ENABLED' if self.auto_fire else 'DISABLED'}")
         print(f"[•] Sentry Standby    : {'ENABLED' if self.standby_mode else 'DISABLED'}")
         print(f"[•] Web Cockpit       : {self.base_url}")
-        print("[•] Closest Person Rule: ONLY the closest person is targeted.")
         if self.show_gui:
             print("[•] OpenCV Window     : Enabled (Press 'q' to quit)")
         print("[•] Stop              : Press Ctrl+C in this terminal.\n")
@@ -608,21 +606,16 @@ class LocalVisionTracker:
                             "area": area
                         })
 
-                # 2. Strict Person Rule: ONLY the closest person (largest bounding box area) is kept!
+                # 2. Keep all detected persons, bottles, and cans (any target is eligible for engagement)
                 filtered_detections = []
                 if len(person_boxes) > 0:
-                    person_boxes.sort(key=lambda p: p["area"], reverse=True)
-                    closest_person = person_boxes[0]
-                    closest_person["label"] = "person (closest)"
-                    filtered_detections.append(closest_person)
+                    filtered_detections.extend(person_boxes)
 
                 # Bottles & Cans: Keep all detected bottles and cans for tracking and sequential target switching
                 if len(bottle_boxes) > 0:
-                    bottle_boxes.sort(key=lambda b: b["area"], reverse=True)
                     filtered_detections.extend(bottle_boxes)
 
                 if len(can_boxes) > 0:
-                    can_boxes.sort(key=lambda c: c["area"], reverse=True)
                     filtered_detections.extend(can_boxes)
 
                 # Fetch current attitude telemetry before tracker update
@@ -666,8 +659,11 @@ class LocalVisionTracker:
 
                     # Target switching: Only UN-HIT targets are eligible for selection!
                     if is_target and not is_hit:
-                        if det["area"] > best_target_score:
-                            best_target_score = det["area"]
+                        bx, by, bw, bh = det["bbox"]
+                        cx, cy = bx + bw / 2.0, by + bh / 2.0
+                        dist_to_crosshair = ((cx - frame_w / 2.0) ** 2 + (cy - frame_h / 2.0) ** 2) ** 0.5
+                        if best_target_score < 0 or dist_to_crosshair < best_target_score:
+                            best_target_score = dist_to_crosshair
                             best_target_box = det["bbox"]
                             best_target_label = det["label"]
                             best_target_category = det["category"]

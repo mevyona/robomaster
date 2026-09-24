@@ -93,8 +93,7 @@ func (G *Gun) String() string {
 	return "Gun"
 }
 
-// fireBead triggers physical gel bead firing by engaging the flywheels and feeder wheel
-// for 650ms, which chambers and propels 1 bead before cleanly stopping the motors.
+// fireBead triggers real physical gel bead firing via KeyRobomasterWaterGunWaterGunFireWithTimes.
 func (g *Gun) fireBead(times uint64) error {
 	if !g.firing.CompareAndSwap(false, true) {
 		return fmt.Errorf("gun is currently busy firing")
@@ -104,18 +103,17 @@ func (g *Gun) fireBead(times uint64) error {
 		times = 1
 	}
 
-	pulseDuration := time.Duration(times*650) * time.Millisecond
 	go func() {
-		time.Sleep(pulseDuration)
-		_ = g.ub.DirectSendKeyValue(key.KeyRobomasterWaterGunWaterGunFire, uint64(0))
+		// Cooldown for physical flywheel and feed mechanism cycle
+		time.Sleep(1200 * time.Millisecond)
 		g.firing.Store(false)
 	}()
 
-	return g.ub.DirectSendKeyValue(key.KeyRobomasterWaterGunWaterGunFire, uint64(1))
+	return g.ub.DirectSendKeyValue(key.KeyRobomasterWaterGunWaterGunFireWithTimes, times)
 }
 
 // fireInfrared triggers pure laser simulation (laser sound effect + red LED flash on turret)
-// with a brief 120ms pulse, without chambering or propelling a bead.
+// with a brief 120ms pulse on KeyRobomasterWaterGunWaterGunFire.
 func (g *Gun) fireInfrared() error {
 	if !g.firing.CompareAndSwap(false, true) {
 		return fmt.Errorf("gun is currently busy firing")

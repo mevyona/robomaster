@@ -783,7 +783,7 @@ const dashboardHTML = `<!DOCTYPE html>
         </div>
         <select id="targetSelect" onchange="onTargetChange()" style="width: 100%; padding: 8px 10px; background: #21262d; color: #f0f6fc; border: 1px solid #30363d; border-radius: 6px; font-size: 0.88rem; font-weight: 500; cursor: pointer; outline: none;">
           <option value="can" selected>🥫 Soda can / Cup</option>
-          <option value="person">👤 Person (closest only)</option>
+          <option value="person">👤 Person</option>
           <option value="bottle">🍾 Bottle</option>
           <option value="all">🎯 All 3 targets</option>
         </select>

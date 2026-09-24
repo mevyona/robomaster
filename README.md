@@ -31,12 +31,12 @@ Le but de ce projet est de transformer le **DJI RoboMaster S1** en une **tourell
 - **Cockpit Web ultra-fluide (60 FPS)** : affichage du flux vidéo HD en direct sans saccade avec réticule tactique (HUD Canvas). Accessible depuis n'importe quel navigateur (PC, smartphone, tablette) sur le réseau local.
 - **IA de détection locale (YOLOv8)** : exécution du modèle de détection d'objets en local sur la machine hôte (0% de charge sur le navigateur web).
 - **Cibles restreintes & intelligentes** :
-  1. **Personne (`person`)** : algorithme calculant la personne **la plus proche** de la caméra et ignorant les personnes en arrière-plan. Protection du visage intégrée (**NO-FIRE FACE ZONE**) et visée sécurisée sur le torse.
+  1. **Personne (`person`)** : détection et engagement de toute personne visible dans le champ de vision (sans restriction à la seule plus proche). Protection du visage intégrée (**NO-FIRE FACE ZONE**) et visée sécurisée sur le torse.
   2. **Bouteille (`bottle`)**.
   3. **Canette de soda (`can` / `cup`)**.
 - **Verrouillage & Tir Automatique (Auto-Fire)** : désactivé par défaut au démarrage pour sécurité. Dès qu'il est activé et que la cible sélectionnée est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement un tir selon le mode configuré (identique à l'application officielle DJI iOS) :
-  - **Mode Laser (Infrarouge)** : tir de simulation laser (effets sonores, flash LED rouge tourelle, signaux IR via impulsion de 120 ms). Les moteurs mécaniques d'expulsion de billes ne s'engagent pas.
-  - **Mode Bille (Gel beads)** : vrai tir physique du canon à billes de gel (`gun.TypeBead` via impulsion de 650 ms), activant les volants d'accélération et le moteur d'alimentation mécanique.
+  - **Mode Laser (Infrarouge)** : tir de simulation laser simple (effets sonores laser DJI, flash LED rouge tourelle via impulsion de 120 ms). Les moteurs d'expulsion de billes ne s'engagent pas.
+  - **Mode Bille (Gel beads)** : vrai tir physique du canon à billes de gel (`gun.TypeBead` via `KeyRobomasterWaterGunWaterGunFireWithTimes`), activant les volants d'accélération et le moteur d'alimentation mécanique pour propulser une vraie bille.
   - *Note : Conformément au protocole officiel DJI, les deux modes sont strictement distincts et ne sont jamais déclenchés en même temps.*
 - **Enchaînement Intelligent & Changement de Cible après Tir** : dès qu'une cible est touchée, elle est enregistrée comme éliminée (`💥 HIT`) et le robot bascule automatiquement sur la cible suivante non touchée.
 - **Mode Standby Tourelle Sentinelle 360°** : désactivé par défaut au démarrage. Une fois activé, la tourelle effectue un balayage panoramique continu d'amplitude maximale gauche/droite. Dès qu'une cible entre dans le champ de vision, le balayage s'interrompt instantanément pour engager le suivi, le verrouillage et le tir.
