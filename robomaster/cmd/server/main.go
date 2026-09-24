@@ -41,17 +41,17 @@ var (
 	currentTargetLock sync.RWMutex
 	currentTarget     = "can"
 
-	// Auto-fire upon target lock
+	// Auto-fire upon target lock (DISABLED by default)
 	autoFireEnabledLock sync.RWMutex
-	autoFireEnabled     = true
+	autoFireEnabled     = false
 
 	// Fire mode: "laser" (tir infrarouge / laser sans billes) ou "bead" (vrai tir mécanique de billes)
 	fireTypeLock sync.RWMutex
 	fireType     = "laser"
 
-	// Sentry Standby Mode (Left/Right continuous turret sweep)
+	// Sentry Standby Mode (Left/Right continuous turret sweep - DISABLED by default)
 	standbyEnabledLock sync.RWMutex
-	standbyEnabled     = true
+	standbyEnabled     = false
 
 
 	// Action log file mutex
@@ -795,14 +795,14 @@ const dashboardHTML = `<!DOCTYPE html>
             <div style="font-size: 0.85rem; font-weight: 600; color: #f85149;">💥 Auto-Fire on Lock</div>
             <div style="font-size: 0.72rem; color: #8b949e;">Fires once when target is centered</div>
           </div>
-          <input type="checkbox" id="autoFireToggle" onchange="toggleAutoFire(this.checked)" checked style="width: 18px; height: 18px; cursor: pointer; accent-color: #f85149;">
+          <input type="checkbox" id="autoFireToggle" onchange="toggleAutoFire(this.checked)" style="width: 18px; height: 18px; cursor: pointer; accent-color: #f85149;">
         </div>
         <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: rgba(56, 139, 253, 0.12); border: 1px solid rgba(56, 139, 253, 0.35); border-radius: 6px;">
           <div>
             <div style="font-size: 0.85rem; font-weight: 600; color: #58a6ff;">📡 Sentry Standby Mode</div>
             <div style="font-size: 0.72rem; color: #8b949e;">Sweeps left/right until target detected</div>
           </div>
-          <input type="checkbox" id="standbyToggle" onchange="toggleStandby(this.checked)" checked style="width: 18px; height: 18px; cursor: pointer; accent-color: #388bfd;">
+          <input type="checkbox" id="standbyToggle" onchange="toggleStandby(this.checked)" style="width: 18px; height: 18px; cursor: pointer; accent-color: #388bfd;">
         </div>
       </div>
 

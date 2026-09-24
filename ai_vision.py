@@ -141,7 +141,7 @@ class SimpleObjectTracker:
         self.next_id = 1
 
 class LocalVisionTracker:
-    def __init__(self, base_url="http://localhost:8080", target="can", conf=0.25, auto_fire=True, standby_mode=True, gui=False):
+    def __init__(self, base_url="http://localhost:8080", target="can", conf=0.25, auto_fire=False, standby_mode=False, gui=False):
         self.base_url = base_url.rstrip("/")
         self.target = self.normalize_target(target)
         self.conf_threshold = conf
@@ -317,7 +317,7 @@ class LocalVisionTracker:
         try:
             r = requests.get(f"{self.base_url}/api/autofire", timeout=0.3)
             if r.status_code == 200:
-                af = r.json().get("auto_fire", True)
+                af = r.json().get("auto_fire", False)
                 if af != self.auto_fire:
                     self.auto_fire = af
                     self.log_action("CONFIG", f"Auto-fire setting synchronized: {self.auto_fire}")
@@ -328,7 +328,7 @@ class LocalVisionTracker:
         try:
             r = requests.get(f"{self.base_url}/api/standby", timeout=0.3)
             if r.status_code == 200:
-                st = r.json().get("standby", True)
+                st = r.json().get("standby", False)
                 if st != self.standby_mode:
                     self.standby_mode = st
                     self.log_action("CONFIG", f"Sentry standby mode synchronized: {self.standby_mode}")
@@ -973,8 +973,8 @@ def main():
     parser.add_argument("--url", default="http://localhost:8080", help="Base URL of local RoboMaster server")
     parser.add_argument("--target", default="can", help="Target: can, person, bottle, all (default: can)")
     parser.add_argument("--conf", type=float, default=0.25, help="Confidence threshold (default: 0.25)")
-    parser.add_argument("--no-fire", action="store_true", help="Disable automatic infrared fire on lock")
-    parser.add_argument("--no-standby", action="store_true", help="Disable sentry sweep when no target is present")
+    parser.add_argument("--auto-fire", action="store_true", help="Enable automatic fire on lock (default: False)")
+    parser.add_argument("--standby", action="store_true", help="Enable sentry sweep when no target is present (default: False)")
     parser.add_argument("--gui", action="store_true", help="Show local OpenCV window with bounding boxes")
     args = parser.parse_args()
 
@@ -982,8 +982,8 @@ def main():
         base_url=args.url,
         target=args.target,
         conf=args.conf,
-        auto_fire=not args.no_fire,
-        standby_mode=not args.no_standby,
+        auto_fire=args.auto_fire,
+        standby_mode=args.standby,
         gui=args.gui
     )
     tracker.run()

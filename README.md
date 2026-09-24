@@ -34,12 +34,12 @@ Le but de ce projet est de transformer le **DJI RoboMaster S1** en une **tourell
   1. **Personne (`person`)** : algorithme calculant la personne **la plus proche** de la caméra et ignorant les personnes en arrière-plan. Protection du visage intégrée (**NO-FIRE FACE ZONE**) et visée sécurisée sur le torse.
   2. **Bouteille (`bottle`)**.
   3. **Canette de soda (`can` / `cup`)**.
-- **Verrouillage & Tir Automatique (Auto-Fire)** : dès que la cible sélectionnée est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement un tir selon le mode configuré (identique à l'application officielle DJI iOS) :
-  - **Mode Laser (Infrarouge)** : tir de simulation laser (effets sonores, flash LED rouge tourelle, signaux IR). Les moteurs mécaniques du canon restent à l'arrêt.
-  - **Mode Bille (Gel beads)** : vrai tir physique du canon à billes de gel (`gun.TypeBead`), activant les volants d'accélération et le moteur d'alimentation mécanique.
+- **Verrouillage & Tir Automatique (Auto-Fire)** : désactivé par défaut au démarrage pour sécurité. Dès qu'il est activé et que la cible sélectionnée est centrée dans le viseur pendant ~350 ms, la mire passe au rouge, verrouille la cible et déclenche automatiquement un tir selon le mode configuré (identique à l'application officielle DJI iOS) :
+  - **Mode Laser (Infrarouge)** : tir de simulation laser (effets sonores, flash LED rouge tourelle, signaux IR via impulsion de 120 ms). Les moteurs mécaniques d'expulsion de billes ne s'engagent pas.
+  - **Mode Bille (Gel beads)** : vrai tir physique du canon à billes de gel (`gun.TypeBead` via impulsion de 650 ms), activant les volants d'accélération et le moteur d'alimentation mécanique.
   - *Note : Conformément au protocole officiel DJI, les deux modes sont strictement distincts et ne sont jamais déclenchés en même temps.*
-- **Enchaînement Intelligent & Changement de Cible après Tir** : dès qu'une cible est touchée, elle est enregistrée comme éliminée (`💥 HIT`) et le robot bascule automatiquement sur la cible suivante non touchée. Si toutes les cibles en vue sont éliminées, la patrouille sentinelle 360° reprend automatiquement.
-- **Mode Standby Tourelle Sentinelle 360°** : en l'absence de cible, la tourelle effectue un balayage panoramique continu d'amplitude maximale gauche/droite. Dès qu'une cible entre dans le champ de vision, le balayage s'interrompt instantanément pour engager le suivi, le verrouillage et le tir.
+- **Enchaînement Intelligent & Changement de Cible après Tir** : dès qu'une cible est touchée, elle est enregistrée comme éliminée (`💥 HIT`) et le robot bascule automatiquement sur la cible suivante non touchée.
+- **Mode Standby Tourelle Sentinelle 360°** : désactivé par défaut au démarrage. Une fois activé, la tourelle effectue un balayage panoramique continu d'amplitude maximale gauche/droite. Dès qu'une cible entre dans le champ de vision, le balayage s'interrompt instantanément pour engager le suivi, le verrouillage et le tir.
 
 ---
 
@@ -383,9 +383,9 @@ Accessible à l'adresse `http://<IP_HOTE>:8080`, l'interface graphique offre :
 - **HUD Tactique Canvas 60 FPS** : Réticule vert lors du suivi, rouge clignotant lors du verrouillage et du tir.
 - **Sélecteur de Cible en Direct** : Choix entre `Canette`, `Personne`, `Bouteille` ou `Toutes les cibles` sans redémarrer le script d'IA.
 - **Sélecteur de Mode de Tir** : Choix instantané entre `Mode Laser (Infrarouge)` et `Mode Bille (Canon réel)`.
-- **Bouton Auto-Tir** : Activation / désactivation instantanée de l'autorisation de tir automatique.
-- **Bouton Sentinelle 360°** : Marche / Arrêt du balayage de patrouille automatique.
-- **Contrôle Manuel au Clavier** : Utilisation des flèches directionnelles du clavier pour orienter la tourelle manuellement, et touche Espace pour déclencher le vrai tir physique.
+- **Bouton Auto-Tir (Désactivé par défaut)** : Interrupteur d'autorisation de tir automatique (case décochée au démarrage pour une sécurité totale).
+- **Bouton Sentinelle 360° (Désactivé par défaut)** : Marche / Arrêt du balayage de patrouille automatique (case décochée au démarrage).
+- **Contrôle Manuel au Clavier** : Utilisation des flèches directionnelles du clavier pour orienter la tourelle manuellement, et touche Espace pour déclencher le tir selon le mode choisi.
 - **Console de Journal d'Action** : Visualisation en direct des tirs et détections.
 
 ---

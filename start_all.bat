@@ -13,8 +13,9 @@ timeout /t 3 /nobreak >nul
 start http://localhost:8080
 
 echo [3/3] Launching Local AI Vision (YOLOv8 nano)...
-echo [*] Sentry Turret Standby: ENABLED (360 deg panoramic sweep)
-echo [*] Target & Controls: 100%% via Web Cockpit (http://localhost:8080)
+echo [*] Automatic Fire       : DISABLED by default (activate in Web Cockpit)
+echo [*] Sentry Turret Standby: DISABLED by default (activate in Web Cockpit)
+echo [*] Target & Controls    : 100%% via Web Cockpit (http://localhost:8080)
 echo.
 
 cd /d "%~dp0"

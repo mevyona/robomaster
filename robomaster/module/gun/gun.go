@@ -3,6 +3,7 @@ package gun
 import (
 	"fmt"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	"github.com/brunoga/robomaster/module"
@@ -11,16 +12,16 @@ import (
 	"github.com/brunoga/robomaster/support/logger"
 	"github.com/brunoga/robomaster/unitybridge"
 	"github.com/brunoga/robomaster/unitybridge/unity/key"
-	"github.com/brunoga/robomaster/unitybridge/unity/result/value"
 )
 
-// Gun is the module that controls turret firing. It supports both infrared and
-// beads firing.
+// Gun is the module that controls turret firing. It supports both laser simulation
+// and physical gel beads firing.
 type Gun struct {
-	ub unitybridge.UnityBridge
-	l  *logger.Logger
-	rm *robot.Robot
-	cm *connection.Connection
+	ub     unitybridge.UnityBridge
+	l      *logger.Logger
+	rm     *robot.Robot
+	cm     *connection.Connection
+	firing atomic.Bool
 }
 
 var _ module.Module = (*Gun)(nil)
@@ -92,40 +93,39 @@ func (G *Gun) String() string {
 	return "Gun"
 }
 
-// fireBead triggers physical gel bead firing by engaging the bead flywheels and feed mechanism.
+// fireBead triggers physical gel bead firing by engaging the flywheels and feeder wheel
+// for 650ms, which chambers and propels 1 bead before cleanly stopping the motors.
 func (g *Gun) fireBead(times uint64) error {
+	if !g.firing.CompareAndSwap(false, true) {
+		return fmt.Errorf("gun is currently busy firing")
+	}
+
 	if times == 0 {
 		times = 1
 	}
 
-	// 1. Send high-level DJI command to fire N beads (JSON payload via PerformActionForKey)
-	_ = g.ub.PerformActionForKey(key.KeyRobomasterWaterGunWaterGunFireWithTimes,
-		&value.Uint64{Value: times}, nil)
-
-	// 2. Also send DirectSendKeyValue with times to cover direct bridge handlers
-	_ = g.ub.DirectSendKeyValue(key.KeyRobomasterWaterGunWaterGunFireWithTimes, times)
-
-	// 3. Pulse KeyRobomasterWaterGunWaterGunFire (1 then 0)
-	// Gel bead mechanism requires ~700ms pulse for the motors to spin up and feed a bead
-	pulseDuration := time.Duration(times*700) * time.Millisecond
+	pulseDuration := time.Duration(times*650) * time.Millisecond
 	go func() {
 		time.Sleep(pulseDuration)
 		_ = g.ub.DirectSendKeyValue(key.KeyRobomasterWaterGunWaterGunFire, uint64(0))
+		g.firing.Store(false)
 	}()
 
 	return g.ub.DirectSendKeyValue(key.KeyRobomasterWaterGunWaterGunFire, uint64(1))
 }
 
-// fireInfrared triggers pure laser/infrared firing (sound and LED flash without moving the bead motors).
+// fireInfrared triggers pure laser simulation (laser sound effect + red LED flash on turret)
+// with a brief 120ms pulse, without chambering or propelling a bead.
 func (g *Gun) fireInfrared() error {
-	// Send both via PerformActionForKey and DirectSendKeyValue for KeyRobomasterInfraredGunInfraredGunFire
-	_ = g.ub.PerformActionForKey(key.KeyRobomasterInfraredGunInfraredGunFire,
-		&value.Uint64{Value: 1}, nil)
+	if !g.firing.CompareAndSwap(false, true) {
+		return fmt.Errorf("gun is currently busy firing")
+	}
 
 	go func() {
-		time.Sleep(150 * time.Millisecond)
-		_ = g.ub.DirectSendKeyValue(key.KeyRobomasterInfraredGunInfraredGunFire, uint64(0))
+		time.Sleep(120 * time.Millisecond)
+		_ = g.ub.DirectSendKeyValue(key.KeyRobomasterWaterGunWaterGunFire, uint64(0))
+		g.firing.Store(false)
 	}()
 
-	return g.ub.DirectSendKeyValue(key.KeyRobomasterInfraredGunInfraredGunFire, uint64(1))
+	return g.ub.DirectSendKeyValue(key.KeyRobomasterWaterGunWaterGunFire, uint64(1))
 }

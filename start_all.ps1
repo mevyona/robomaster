@@ -14,8 +14,9 @@ Start-Sleep -Seconds 3
 Start-Process "http://localhost:8080"
 
 Write-Host "[3/3] Launching Local AI Vision (YOLOv8 nano)..." -ForegroundColor Green
-Write-Host "[*] Sentry Turret Standby: ENABLED (360° panoramic sweep)"
-Write-Host "[*] Target & Controls: 100% via Web Cockpit (http://localhost:8080)`n"
+Write-Host "[*] Automatic Fire       : DISABLED by default (activate in Web Cockpit)"
+Write-Host "[*] Sentry Turret Standby: DISABLED by default (activate in Web Cockpit)"
+Write-Host "[*] Target & Controls    : 100% via Web Cockpit (http://localhost:8080)`n"
 
 try {
     & "$PSScriptRoot\.venv\Scripts\python.exe" "$PSScriptRoot\ai_vision.py" @args
