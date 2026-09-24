@@ -390,5 +390,14 @@ results = self.model(frame, imgsz=320, conf=self.conf_threshold)
   1. Vérifiez que le bouton `Auto-Tir : ACTIF` est activé dans le cockpit web (`http://<IP>:8080`).
   2. Vérifiez que la cible n'est pas déjà marquée `HIT` (temps de réactivation de 30 secondes).
 
+### Problème 5 : Erreur `Le paquet « libatlas-base-dev » n'a pas de version susceptible d'être installée`
+- **Cause** : `libatlas-base-dev` est un ancien paquet obsolète supprimé des versions modernes de Debian 12 (Bookworm) et 13 (Trixie).
+- **Solution** : Il est remplacé par `libopenblas-dev`. Le script [`setup_rpi.sh`](file:///c:/Users/mev/Downloads/Robomaster%20S1/setup_rpi.sh) a été mis à jour pour installer automatiquement `libopenblas-dev`. Si vous effectuez une installation manuelle :
+  ```bash
+  sudo apt install -y python3 python3-pip python3-venv python3-dev git curl wget libgl1 libgomp1 libopenblas-dev
+  ```
+
 ---
 *Ce document est maintenu à jour à chaque modification du projet conformément aux directives d'`AGENTS.md`.*
+
+

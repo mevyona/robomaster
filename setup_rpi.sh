@@ -24,7 +24,8 @@ sudo apt update && sudo apt upgrade -y
 # 2. Dépendances système pour Python, OpenCV et multimédia
 echo -e "\n[2/5] Installation des dépendances système..."
 sudo apt install -y python3 python3-pip python3-venv python3-dev \
-    git curl wget libgl1 libglib2.0-0 libgomp1 libatlas-base-dev
+    git curl wget libgl1 libgomp1 libopenblas-dev
+
 
 # 3. Installation de Box64 et Wine (pour exécuter le bridge UnityBridge x86_64)
 echo -e "\n[3/5] Configuration de Box64 & Wine64 pour le bridge DJI..."
@@ -38,8 +39,9 @@ if ! command -v box64 &> /dev/null; then
     wget https://ryanfortner.github.io/box86-debs/box86.list -O /tmp/box86.list || true
     
     sudo apt update
-    sudo apt install -y box64-rpi4arm64 || sudo apt install -y box64 || echo "[!] Box64 sera à installer via Pi-Apps si échec apt"
-    sudo apt install -y wine wine64 || true
+    sudo apt install -y box64-rpi5arm64 2>/dev/null || sudo apt install -y box64-rpi4arm64 2>/dev/null || sudo apt install -y box64-generic-arm64 2>/dev/null || sudo apt install -y box64 2>/dev/null || echo "[!] Box64 peut être installé via Pi-Apps (https://pi-apps.io)"
+    sudo apt install -y wine wine64 2>/dev/null || sudo apt install -y wine-staging-linux-amd64 2>/dev/null || true
+
 else
     echo "[✓] Box64 est déjà installé."
 fi
