@@ -19,8 +19,9 @@ Ce guide fournit une documentation technique complète, de A à Z, permettant à
 12. [Le Cockpit Web Tactique (Port 8080)](#12-le-cockpit-web-tactique-port-8080)
 13. [Guide de Démarrage Rapide (1-Clic)](#13-guide-de-démarrage-rapide-1-clic)
 14. [Journal des Actions & Fichier de Log (`robot_actions.log`)](#14-journal-des-actions--fichier-de-log-robot_actionslog)
-15. [Optimisations Spécifiques au Raspberry Pi (NCNN & Performance)](#15-optimisations-spécifiques-au-raspberry-pi-ncnn--performance)
-16. [Résolution des Pannes (Troubleshooting)](#16-résolution-des-pannes-troubleshooting)
+15. [Streaming des Logs en Temps Réel vers un Raspberry Pi (UDP:9999)](#15-streaming-des-logs-en-temps-réel-vers-un-raspberry-pi-udp9999)
+16. [Optimisations Spécifiques au Raspberry Pi (NCNN & Performance)](#16-optimisations-spécifiques-au-raspberry-pi-ncnn--performance)
+17. [Résolution des Pannes (Troubleshooting)](#17-résolution-des-pannes-troubleshooting)
 
 ---
 
@@ -45,7 +46,7 @@ Le but de ce projet est de transformer le **DJI RoboMaster S1** en une **tourell
 
 ## 2. Architecture Globale du Système
 
-Le système repose sur un découplage en 3 couches indépendantes :
+Le système repose sur un découplage en couches indépendantes communicant via HTTP, CGO et UDP :
 
 ```
                   ┌─────────────────────────────────────────┐
@@ -71,25 +72,25 @@ Le système repose sur un découplage en 3 couches indépendantes :
 │  - Gestionnaire de tir : 2 modes officiels (Mode Laser ou Mode Bille)     │
 │  - Distribue le flux MJPEG (/video)                                       │
 │  - Centralise les cibles (/api/target) et détections (/api/detections)    │
-└──────────────────────┬─────────────────────────────▲──────────────────────┘
-                       │                             │
-        /snapshot (JPEG)                             │ /api/gimbal (Asservissement)
-                       │                             │ /api/fire (Auto-tir réel)
-                       ▼                             │ /api/detections (HUD)
-┌────────────────────────────────────────┐           │
-│        IA LOCALE (Python YOLOv8)       │           │
-│         (ai_vision.py)                 ├───────────┘
+│  - Stream UDP non-bloquant des logs vers la Raspberry Pi (:9999)          │
+└───────────────┬────────────────────────────▲──────────────────────────────┘
+                │                            │
+ /snapshot (JPEG)                            │ /api/gimbal (Asservissement)
+                │                            │ /api/fire (Auto-tir réel)
+                ▼                            │ /api/detections (HUD)
+┌────────────────────────────────────────┐   │
+│        IA LOCALE (Python YOLOv8)       ├───┘
+│         (ai_vision.py)                 │
 │                                        │
 │  - YOLOv8 nano (Inférence CPU/NEON)    │
-│  - Filtre personne la plus proche      │
-│  - Détection bouteille / canette       │
-│  - Calcul d'erreur PID & centrage      │
+│  - Détection personne / bouteille / can│
+│  - Protection visage & ciblage torse   │
+│  - Asservissement PID de la tourelle   │
 │  - Verrouillage & Cooldown de tir      │
-└────────────────────────────────────────┘
-                       │
-       Coordonnées des boîtes & Statut Lock
-                       │
-                       ▼
+└───────────────────┬────────────────────┘
+                    │
+                    │   Coordonnées boîtes & Rendu HUD
+                    ▼
 ┌───────────────────────────────────────────────────────────────────────────┐
 │                       COCKPIT WEB HTML5 / CANVAS                          │
 │                       (http://<IP_HOTE>:8080)                             │
@@ -98,8 +99,19 @@ Le système repose sur un découplage en 3 couches indépendantes :
 │  - Viseur dynamique (Vert = suivi, Rouge = Lock / Tir)                    │
 │  - Sélecteur de cible en direct (synchronisé avec l'IA sans redémarrage)  │
 │  - Sélecteur de mode de tir : Mode Laser (Infrarouge) / Mode Bille réel   │
-│  - Interrupteur marche/arrêt de l'Auto-Tir                                │
+│  - Configuration en direct du streaming de logs vers le Raspberry Pi      │
 │  - Contrôle manuel d'orientation aux flèches du clavier & Espace pour tir │
+└───────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   │  Flux UDP temps réel (Port 9999)
+                                   ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                    RASPBERRY PI (POSTE SURVEILLANCE / LOGS)               │
+│                    (python3 rpi_log_receiver.py)                          │
+│                                                                           │
+│  - Écoute UDP sur 0.0.0.0:9999 (zéro lag, non bloquant)                   │
+│  - Affichage colorisé en direct dans le terminal (Codes ANSI)             │
+│  - Enregistrement miroir permanent dans 'rpi_robot_actions.log'           │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -118,15 +130,16 @@ Robomaster S1/
 ├── requirements.txt            # Dépendances Python (ultralytics, opencv, requests, numpy)
 ├── setup_rpi.sh                # Script d'installation automatique pour Raspberry Pi 64-bit
 ├── start_all.sh                # Script de lancement tout-en-un pour Raspberry Pi / Linux
-├── start_all.bat               # Lanceur rapide Windows (Batch)
-├── start_all.ps1               # Lanceur complet Windows (PowerShell)
+├── start_all.bat               # Lanceur rapide Windows (Batch) avec support RPI_LOG_IP
+├── start_all.ps1               # Lanceur complet Windows (PowerShell) avec paramètre -RpiIP
 │
 ├── ai_vision.py                # Cœur de l'IA de vision locale (YOLOv8, asservissement tourelle, tir auto réel)
 ├── detect_objects.py           # Script de test de détection simple
 ├── robomaster_api.py           # Bibliothèque cliente Python simplifiée (contrôle, statuts, tirs)
-├── robot_actions.log           # Fichier journal horodaté de toutes les actions du robot
+├── robot_actions.log           # Fichier journal horodaté local de toutes les actions du robot
+├── rpi_log_receiver.py         # Récepteur de logs distant pour Raspberry Pi (UDP:9999, console couleur & fichier)
 │
-├── robomaster_server.exe       # Binaire exécutable Windows du serveur Go (gestion tirs réels)
+├── robomaster_server.exe       # Binaire exécutable Windows du serveur Go (gestion tirs réels & streaming logs)
 ├── unitybridge.dll             # Bibliothèque dynamique DJI requise pour communiquer avec le robot
 ├── yolov8n.pt                  # Poids neuronaux YOLOv8 nano (détection des objets)
 ├── yolov8n-pose.pt             # Poids neuronaux YOLOv8 pose (protection du visage & ciblage torse)
@@ -141,7 +154,7 @@ Robomaster S1/
     │
     ├── cmd/
     │   └── server/
-    │       └── main.go         # Code source du serveur HTTP, décodeur vidéo, tirs et API REST
+    │       └── main.go         # Code source du serveur HTTP, décodeur vidéo, tirs réels, API REST & streaming UDP
     │
     ├── module/                 # Modules de contrôle matériel
     │   ├── camera/             # Gestion du flux vidéo H264
@@ -474,7 +487,102 @@ Exemple d'extrait réel de `robot_actions.log` :
 
 ---
 
-## 15. Optimisations Spécifiques au Raspberry Pi (NCNN & Performance)
+## 15. Streaming des Logs en Temps Réel vers un Raspberry Pi (UDP:9999)
+
+Pour permettre la surveillance déportée, la supervision à distance ou l'archivage sur un poste de contrôle dédié sans surcharger la machine exécutant le robot, le système intègre un **mécanisme de streaming de télémétrie et d'actions vers un Raspberry Pi en temps réel**.
+
+### 15.1 Pourquoi le Protocole UDP (Port 9999) ?
+- **Non-bloquant et Ultra-rapide (0 ms de latence)** : chaque paquet de log est émis via un datagramme UDP asynchrone (goroutine en Go / socket non-bloquant en Python).
+- **Résilience absolue aux pannes** : si le Raspberry Pi est éteint, en cours de redémarrage ou subit une coupure Wi-Fi, la machine Windows continue de piloter le robot et l'IA à pleine vitesse sans aucun blocage, sans file d'attente saturée et sans timeout réseau.
+- **Zéro dépendance externe** : le récepteur sur Raspberry Pi fonctionne avec la bibliothèque standard Python 3 (`socket`, `sys`, `re`, `datetime`).
+
+---
+
+### 15.2 Étape 1 : Lancement du Récepteur sur le Raspberry Pi
+
+Sur votre Raspberry Pi connecté au même réseau Wi-Fi ou Ethernet :
+
+1. Récupérez le script [`rpi_log_receiver.py`](file:///c:/Users/mev/Downloads/Robomaster%20S1/rpi_log_receiver.py) (via `git clone`, `scp` ou clé USB) :
+   ```bash
+   scp user@IP_WINDOWS:"c:/Users/mev/Downloads/Robomaster S1/rpi_log_receiver.py" .
+   ```
+2. Lancez le récepteur :
+   ```bash
+   python3 rpi_log_receiver.py
+   ```
+   *(Options facultatives : `python3 rpi_log_receiver.py --port 9999 --log-file rpi_robot_actions.log`)*
+
+3. Dès le démarrage, le script détecte et affiche votre adresse IP locale :
+   ```text
+   ====================================================
+       DJI ROBOMASTER S1 - RASPBERRY PI LOG RECEIVER   
+   ====================================================
+   📡 UDP Port         : 9999
+   📁 Log File Output  : /home/pi/rpi_robot_actions.log
+   📍 Raspberry Pi IP  : 192.168.1.50
+   ----------------------------------------------------
+   👉 Renseignez cette IP sur Windows via :
+      1. Le Web Cockpit : Dans la carte 'Raspberry Pi Log Streaming' -> 192.168.1.50
+      2. En ligne de commande : .\start_all.ps1 -RpiIP 192.168.1.50
+      3. Variable d'env : $env:RPI_LOG_IP = '192.168.1.50'
+   ----------------------------------------------------
+   [*] En attente de logs depuis le robot sous Windows... (Ctrl+C pour quitter)
+   ```
+
+---
+
+### 15.3 Étape 2 : Configuration de l'IP du Raspberry Pi sur Windows
+
+Vous disposez de **4 méthodes au choix** pour indiquer au robot l'adresse IP de votre Raspberry Pi :
+
+#### Méthode 1 : Directement depuis le Cockpit Web (Recommandé - En direct sans redémarrer)
+1. Ouvrez votre navigateur sur `http://localhost:8080`.
+2. Dans le panneau latéral droit, repérez la carte **📡 Raspberry Pi Log Streaming**.
+3. Saisissez l'adresse IP du Raspberry Pi (ex : `192.168.1.50`).
+4. Cliquez sur **Set** : le statut passe immédiatement à `🟢 Stream actif vers 192.168.1.50:9999`.
+5. Cliquez sur le bouton **Test Log** pour envoyer un paquet de test et voir la confirmation instantanément sur l'écran du Raspberry Pi.
+
+#### Méthode 2 : Au lancement via le script PowerShell
+```powershell
+.\start_all.ps1 -RpiIP 192.168.1.50
+```
+
+#### Méthode 3 : Par variable d'environnement Windows
+- **PowerShell** :
+  ```powershell
+  $env:RPI_LOG_IP = "192.168.1.50"
+  .\start_all.ps1
+  ```
+- **Invite de commande (CMD / Batch)** :
+  ```cmd
+  set RPI_LOG_IP=192.168.1.50
+  start_all.bat
+  ```
+
+#### Méthode 4 : En direct via requête HTTP (API REST)
+```bash
+curl -X POST "http://localhost:8080/api/rpi_log?ip=192.168.1.50"
+```
+
+---
+
+### 15.4 Visualisation Colorée & Archivage Automatique
+
+Chaque action exécutée par le robot sur Windows est instantanément transmise, analysée et formatée sur le terminal du Raspberry Pi avec des codes couleurs ANSI :
+
+- `[FIRE]` / `[TIR]` : **Rouge vif clignotant / gras** 💥 avec distinction Mode Laser vs Mode Bille.
+- `[LOCK]` : **Jaune / Orange vif** 🎯 dès que la cible est centrée et prête au tir.
+- `[AI]` / `[VISION]` / `[TARGET]` : **Magenta** 🤖 avec identifiant de suivi (`track #`), boîte englobante et catégorie.
+- `[TURRET]` / `[GIMBAL]` : **Cyan** 📐 avec angles de Pitch et Yaw en temps réel.
+- `[CONNECTION]` : **Vert vif** 🟢 avec niveau de batterie du robot.
+- `[CONFIG]` : **Bleu** ⚙️ lors d'un changement de cible, d'activation d'Auto-Tir ou du mode sentinelle.
+- `[SAFETY]` : **Jaune d'or** 🛡️ lors d'une détection de visage et déviation torse.
+
+Tous les logs entrants sont **automatiquement enregistrés** dans le fichier `rpi_robot_actions.log` du Raspberry Pi avec un `flush` immédiat sur disque pour conservation d'historique et relecture.
+
+---
+
+## 16. Optimisations Spécifiques au Raspberry Pi (NCNN & Performance)
 
 Sur un Raspberry Pi 4 ou 5, plusieurs optimisations permettent d'augmenter le nombre d'images par seconde (FPS) de l'IA :
 
@@ -499,7 +607,7 @@ results = self.model(frame, imgsz=320, conf=self.conf_threshold)
 
 ---
 
-## 16. Résolution des Pannes (Troubleshooting)
+## 17. Résolution des Pannes (Troubleshooting)
 
 ### Problème 1 : `Failed to connect to RoboMaster S1 (10.156.149.194)`
 - **Cause** : L'adresse IP du robot a changé ou le Raspberry Pi / PC n'est pas sur le même réseau Wi-Fi.

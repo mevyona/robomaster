@@ -13,6 +13,7 @@ Exclusively supported targets:
 
 import argparse
 import os
+import socket
 import sys
 import time
 import requests
@@ -141,13 +142,15 @@ class SimpleObjectTracker:
         self.next_id = 1
 
 class LocalVisionTracker:
-    def __init__(self, base_url="http://localhost:8080", target="can", conf=0.25, auto_fire=False, standby_mode=False, gui=False):
+    def __init__(self, base_url="http://localhost:8080", target="can", conf=0.25, auto_fire=False, standby_mode=False, gui=False, rpi_ip=""):
         self.base_url = base_url.rstrip("/")
         self.target = self.normalize_target(target)
         self.conf_threshold = conf
         self.auto_fire = auto_fire
         self.standby_mode = standby_mode
         self.show_gui = gui
+        self.rpi_ip = (rpi_ip or os.environ.get("RPI_LOG_IP", "") or os.environ.get("RPI_IP", "")).strip()
+        self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         self.tracker = SimpleObjectTracker(max_disappeared=25, hit_cooldown=30.0)
         
@@ -205,7 +208,7 @@ class LocalVisionTracker:
         self.target_locked = False
 
     def log_action(self, category, message):
-        """Appends a timestamped log entry to robot_actions.log"""
+        """Appends a timestamped log entry to robot_actions.log, forwards to server & RPi"""
         ts = time.strftime("%Y-%m-%d %H:%M:%S")
         entry = f"[{ts}] [{category}] {message}\n"
         log_path = "robot_actions.log"
@@ -216,6 +219,22 @@ class LocalVisionTracker:
                 f.write(entry)
         except Exception:
             pass
+
+        # Forward to local RoboMaster Go server (which broadcasts to RPi if configured)
+        server_ok = False
+        try:
+            r = requests.post(f"{self.base_url}/api/log", params={"cat": category, "msg": message}, timeout=0.15)
+            if r.status_code == 200:
+                server_ok = True
+        except Exception:
+            pass
+
+        # Direct fallback UDP streaming to Raspberry Pi if server was unreachable
+        if not server_ok and self.rpi_ip:
+            try:
+                self.udp_sock.sendto(entry.encode("utf-8"), (self.rpi_ip, 9999))
+            except Exception:
+                pass
 
     def normalize_target(self, target_str):
         if not target_str:
@@ -246,6 +265,14 @@ class LocalVisionTracker:
                 pass
             print("    [!] Server not detected yet, retrying in 2 seconds...")
             time.sleep(2)
+
+        # Sync RPi log target with server
+        if self.rpi_ip:
+            try:
+                requests.post(f"{self.base_url}/api/rpi_log", params={"ip": self.rpi_ip}, timeout=1.0)
+                print(f"[✓] Remote log streaming to Raspberry Pi configured: {self.rpi_ip}:9999")
+            except Exception:
+                pass
 
         # Synchronize target with server (prioritize Web Cockpit selection)
         server_target = self.get_server_target()
@@ -972,6 +999,7 @@ def main():
     parser.add_argument("--auto-fire", action="store_true", help="Enable automatic fire on lock (default: False)")
     parser.add_argument("--standby", action="store_true", help="Enable sentry sweep when no target is present (default: False)")
     parser.add_argument("--gui", action="store_true", help="Show local OpenCV window with bounding boxes")
+    parser.add_argument("--rpi-ip", default=os.environ.get("RPI_LOG_IP", os.environ.get("RPI_IP", "")), help="Raspberry Pi IP address for remote log streaming (UDP :9999)")
     args = parser.parse_args()
 
     tracker = LocalVisionTracker(
@@ -980,7 +1008,8 @@ def main():
         conf=args.conf,
         auto_fire=args.auto_fire,
         standby_mode=args.standby,
-        gui=args.gui
+        gui=args.gui,
+        rpi_ip=args.rpi_ip
     )
     tracker.run()
 

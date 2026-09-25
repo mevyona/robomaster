@@ -7,6 +7,7 @@ import (
 	"image/jpeg"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -53,6 +54,10 @@ var (
 	standbyEnabledLock sync.RWMutex
 	standbyEnabled     = false
 
+	// Remote log streaming to Raspberry Pi (UDP)
+	rpiLogIPLock sync.RWMutex
+	rpiLogIP     = ""
+	rpiLogPort   = 9999
 
 	// Action log file mutex
 	logFileLock sync.Mutex
@@ -74,6 +79,23 @@ func getLogFilePath() string {
 	return "../robot_actions.log"
 }
 
+func sendUDPLog(ip string, message string) {
+	if ip == "" {
+		return
+	}
+	targetAddr := fmt.Sprintf("%s:%d", ip, rpiLogPort)
+	raddr, err := net.ResolveUDPAddr("udp", targetAddr)
+	if err != nil {
+		return
+	}
+	conn, err := net.DialUDP("udp", nil, raddr)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+	_, _ = conn.Write([]byte(message))
+}
+
 func logAction(category string, message string) {
 	logFileLock.Lock()
 	defer logFileLock.Unlock()
@@ -88,6 +110,15 @@ func logAction(category string, message string) {
 	if err == nil {
 		defer f.Close()
 		_, _ = f.WriteString(entry)
+	}
+
+	// Remote forward to Raspberry Pi via UDP if configured
+	rpiLogIPLock.RLock()
+	targetIP := rpiLogIP
+	rpiLogIPLock.RUnlock()
+
+	if targetIP != "" {
+		go sendUDPLog(targetIP, entry)
 	}
 }
 
@@ -427,6 +458,41 @@ func handleLog(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+func handleRpiLog(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodPost {
+		ip := strings.TrimSpace(r.URL.Query().Get("ip"))
+		if ip == "" {
+			var body struct {
+				IP string `json:"ip"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			ip = strings.TrimSpace(body.IP)
+		}
+		rpiLogIPLock.Lock()
+		rpiLogIP = ip
+		rpiLogIPLock.Unlock()
+
+		if ip != "" {
+			logAction("CONFIG", fmt.Sprintf("Raspberry Pi remote log streaming set to %s:%d", ip, rpiLogPort))
+		} else {
+			logAction("CONFIG", "Raspberry Pi remote log streaming disabled")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"ok","rpi_ip":"` + ip + `"}`))
+		return
+	}
+
+	rpiLogIPLock.RLock()
+	ip := rpiLogIP
+	rpiLogIPLock.RUnlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"rpi_ip":  ip,
+		"port":    rpiLogPort,
+		"enabled": ip != "",
+	})
+}
+
 func handleDashboard(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(dashboardHTML))
@@ -434,14 +500,31 @@ func handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	robotIP := "10.156.149.194"
-	if len(os.Args) > 1 {
+	if len(os.Args) > 1 && os.Args[1] != "" {
 		robotIP = os.Args[1]
+	}
+
+	// Remote log streaming to Raspberry Pi (configurable via CLI or ENV)
+	initialRpiIP := os.Getenv("RPI_LOG_IP")
+	if initialRpiIP == "" {
+		initialRpiIP = os.Getenv("RPI_IP")
+	}
+	if len(os.Args) > 2 && os.Args[2] != "" {
+		initialRpiIP = os.Args[2]
+	}
+	if initialRpiIP != "" {
+		rpiLogIPLock.Lock()
+		rpiLogIP = initialRpiIP
+		rpiLogIPLock.Unlock()
 	}
 
 	fmt.Printf("====================================================\n")
 	fmt.Printf("    DJI ROBOMASTER S1 - PC CONTROL SERVER      \n")
 	fmt.Printf("====================================================\n")
 	fmt.Printf("[+] Connecting to robot at %s...\n", robotIP)
+	if initialRpiIP != "" {
+		fmt.Printf("[+] Remote log streaming configured to Raspberry Pi: %s:%d\n", initialRpiIP, rpiLogPort)
+	}
 
 	l := logger.New(slog.LevelWarn)
 	var err error
@@ -513,6 +596,7 @@ func main() {
 	http.HandleFunc("/api/standby", handleStandby)
 	http.HandleFunc("/api/log", handleLog)
 	http.HandleFunc("/api/logs", handleLog)
+	http.HandleFunc("/api/rpi_log", handleRpiLog)
 
 	serverPort := "8080"
 	fmt.Printf("\n[🚀] RoboMaster Camera Cockpit available at:\n")
@@ -843,6 +927,22 @@ const dashboardHTML = `<!DOCTYPE html>
           </select>
         </div>
 
+      </div>
+
+      <!-- Streaming Logs vers Raspberry Pi -->
+      <div class="card">
+        <h3>📡 Raspberry Pi Log Streaming</h3>
+        <div style="font-size: 0.8rem; color: #8b949e; margin-bottom: 8px;">
+          Envoi des logs en temps réel (UDP :9999) vers le Raspberry Pi :
+        </div>
+        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+          <input type="text" id="rpiIpInput" placeholder="Ex: 192.168.1.50" style="flex: 1; padding: 6px 10px; background: #21262d; color: #f0f6fc; border: 1px solid #30363d; border-radius: 6px; font-size: 0.82rem; font-family: monospace; outline: none;">
+          <button class="btn" onclick="saveRpiIP()" style="padding: 6px 12px; font-size: 0.8rem; background: #238636; border-color: #2ea043;">Set</button>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem;">
+          <span id="rpiStatusText" style="color: #8b949e; font-family: monospace;">Stream: Inactif</span>
+          <button class="btn" onclick="sendTestLog()" style="padding: 3px 8px; font-size: 0.72rem;">Test Log</button>
+        </div>
       </div>
 
       <!-- Instructions -->
@@ -1319,6 +1419,42 @@ const dashboardHTML = `<!DOCTYPE html>
         }
       }).catch(() => {});
     }, 500);
+
+    // Synchronisation et configuration du streaming de logs vers le Raspberry Pi
+    function updateRpiUI(data) {
+      const input = document.getElementById('rpiIpInput');
+      const status = document.getElementById('rpiStatusText');
+      if (data && data.rpi_ip) {
+        if (input && !input.value) input.value = data.rpi_ip;
+        if (status) {
+          status.innerText = '🟢 Stream actif vers ' + data.rpi_ip + ':' + (data.port || 9999);
+          status.style.color = '#7ee787';
+        }
+      } else {
+        if (status) {
+          status.innerText = '⚪ Stream inactif';
+          status.style.color = '#8b949e';
+        }
+      }
+    }
+
+    function fetchRpiLogConfig() {
+      fetch('/api/rpi_log').then(r => r.json()).then(updateRpiUI).catch(() => {});
+    }
+    fetchRpiLogConfig();
+
+    function saveRpiIP() {
+      const ip = document.getElementById('rpiIpInput').value.trim();
+      fetch('/api/rpi_log?ip=' + encodeURIComponent(ip), { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          updateRpiUI(data);
+        }).catch(() => {});
+    }
+
+    function sendTestLog() {
+      fetch('/api/log?cat=TEST&msg=' + encodeURIComponent('Ping test depuis le Web Cockpit vers Raspberry Pi'), { method: 'POST' });
+    }
   </script>
 </body>
 </html>`
